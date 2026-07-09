@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0b0f1e">
+<title>Hex Link — логически пъзел</title>
+<style>
+  :root{
+    --bg:#0b0f1e; --panel:#161d38; --panel2:#1c2447; --line:#2a3560;
+    --text:#e8ecff; --dim:#8e99c9; --accent:#ffd166; --ok:#3ddc84; --bad:#ff5d5d;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0; background:radial-gradient(120% 100% at 50% 0%, #141b33 0%, var(--bg) 70%); color:var(--text);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; min-height:100%; touch-action:manipulation;
+    -webkit-user-select:none; user-select:none; overscroll-behavior:none;}
+  #app{max-width:740px; margin:0 auto; padding:8px 8px 14px;}
+  header{display:flex; flex-direction:column; gap:7px; padding:4px 4px 8px;}
+  .row{display:flex; align-items:center; gap:7px; flex-wrap:wrap;}
+  .logo{font-weight:800; letter-spacing:2.5px; font-size:17px; color:var(--accent); white-space:nowrap;}
+  .logo small{color:var(--dim); font-weight:600; letter-spacing:0.5px;}
+  .spacer{flex:1;}
+  button,select{background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:10px;
+    padding:7px 11px; font-size:14px; font-family:inherit; cursor:pointer; line-height:1.2;}
+  button:active{transform:translateY(1px);}
+  button:disabled{opacity:.35; cursor:default; transform:none;}
+  button.ghost{background:transparent;}
+  button.ctl{min-width:42px; font-size:16px; padding:7px 8px;}
+  select{appearance:none; -webkit-appearance:none; padding-right:22px;
+    background-image:linear-gradient(45deg,transparent 50%,var(--dim) 50%),linear-gradient(135deg,var(--dim) 50%,transparent 50%);
+    background-position:calc(100% - 13px) 55%,calc(100% - 9px) 55%; background-size:4px 4px; background-repeat:no-repeat;}
+  .chnav{display:flex; align-items:center; gap:2px;}
+  .chnav button{padding:7px 10px; font-size:15px;}
+  .chnav .num{min-width:52px; text-align:center; font-weight:700; font-size:14px;}
+  #status{color:var(--dim); font-size:13px; padding:0 4px; min-height:17px;}
+  main{display:flex; justify-content:center;}
+  svg{width:100%; max-width:724px; height:auto; display:block; touch-action:none;}
+  .sock{fill:#0a0e20; stroke:#232c52; stroke-width:1.5;}
+  .sock.hlok{fill:#123c2a; stroke:var(--ok); stroke-width:2.5;}
+  .sock.hlbad{fill:#3c1220; stroke:var(--bad); stroke-width:2.5;}
+  .trayslot{fill:#131a34; stroke:#232c52; stroke-width:1.5; rx:14;}
+  .trayslot.sel{stroke:var(--accent); stroke-width:2.5;}
+  [data-piece]{cursor:grab;}
+  .floating{pointer-events:none;}
+  #modal{position:fixed; inset:0; background:rgba(5,8,18,.6); backdrop-filter:blur(3px);
+    display:flex; align-items:center; justify-content:center; z-index:30; padding:16px;}
+  #modal.hidden,#toast.hidden{display:none;}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:20px 22px;
+    max-width:440px; width:100%; max-height:82vh; overflow:auto; animation:pop .18s ease-out;}
+  @keyframes pop{from{transform:scale(.92); opacity:0;} to{transform:scale(1); opacity:1;}}
+  .card h2{margin:0 0 10px; font-size:20px;}
+  .card p,.card li{color:var(--text); font-size:14px; line-height:1.5;}
+  .card ul{padding-left:18px; margin:8px 0;}
+  .card .note{color:var(--dim); font-size:12px; margin-top:12px;}
+  .card .btns{display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;}
+  .card .btns button.primary{background:var(--accent); color:#20232e; font-weight:700; border-color:transparent;}
+  .bigwin{font-size:42px; text-align:center; margin:2px 0 6px;}
+  #toast{position:fixed; top:12px; left:50%; transform:translateX(-50%); background:#2b355e; border:1px solid var(--line);
+    color:var(--text); padding:9px 16px; border-radius:999px; font-size:13px; z-index:40; max-width:92vw; text-align:center;
+    box-shadow:0 6px 18px rgba(0,0,0,.4); animation:pop .15s ease-out;}
+  @media (max-width:430px){
+    button,select{font-size:13px; padding:6px 9px;}
+    .logo{font-size:15px;}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="row">
+      <span class="logo">⬡ HEX LINK <small id="subT"></small></span>
+      <span class="spacer"></span>
+      <button id="btnLang" class="ghost">EN</button>
+      <button id="btnHelp" class="ghost">?</button>
+    </div>
+    <div class="row">
+      <select id="levelSel"></select>
+      <div class="chnav">
+        <button id="chPrev">‹</button><span class="num" id="chNum">№1</span><button id="chNext">›</button>
+      </div>
+      <button id="btnNew"></button>
+      <button id="btnHint"></button>
+      <span class="spacer"></span>
+      <button id="btnUndo" class="ctl" title="Undo">↶</button>
+      <button id="btnRotL" class="ctl" disabled>⟲</button>
+      <button id="btnRotR" class="ctl" disabled>⟳</button>
+      <button id="btnFlip" class="ctl" disabled>⇋</button>
+      <button id="btnRem" class="ctl" disabled>⌫</button>
+    </div>
+    <div id="status"></div>
+  </header>
+  <main><svg id="svg" xmlns="http://www.w3.org/2000/svg"></svg></main>
+</div>
+<div id="modal" class="hidden"><div class="card" id="modalCard"></div></div>
+<div id="toast" class="hidden"></div>
+<script>
+"use strict";
+/* ============================================================
+   HEX LINK — логически пъзел, вдъхновен от IQ Link (SmartGames)
+   Неофициална фен реализация само за лична употреба.
+   Модел на фигурите: bwesterb/iqlink (проверен срещу описанието
+   на дизайнера Raf Peeters: 16 топчета, 14 отворени, 6 затворени халки).
+   ============================================================ */
+
+/* ---------- i18n ---------- */
+const I18N = {
+  bg:{sub:"пъзел", new:"🎲 Нова", hint:"💡 Жокер", help:"Как се играе",
+    challenge:"Предизвикателство", of:"ниво",
+    remaining:n=>n===1?"Остава 1 фигура":`Остават ${n} фигури`,
+    win:"Браво!", winText:(l,n)=>`Реши предизвикателство №${n} (${l}).`,
+    winHints:h=>h?` Използвани жокери: ${h}.`:" Без жокери!",
+    next:"Следващо ›", close:"Затвори", showSol:"Покажи решението",
+    locked:"Тази фигура е фиксирана от предизвикателството",
+    hintPlaced:"Поставих една фигура от решението.",
+    noHint:"С това подреждане не откривам познато решение — премигващите фигури вероятно трябва да се преместят.",
+    noHint2:"Няма поставени фигури за проверка — просто опитай!",
+    cantRotate:"Тук няма място за завъртане — пречат други фигури",
+    revealed:"Показано е пълното решение.",
+    solved:"решени", freeName:"СВОБОДНА ИГРА",
+    levels:{starter:"СТАРТЕР", junior:"ДЖУНИОР", expert:"ЕКСПЕРТ", master:"МАЙСТОР", wizard:"МАГЬОСНИК", free:"СВОБОДНА"},
+    rules:["Подреди всичките 12 фигури върху дъската.","Елементите са 36, а гнездата само 24: топче може да влезе в отворена халка на друга фигура, ако отворът на халката сочи точно към рамото на топчето.","Затворените халки заемат гнездото изцяло — при тях нищо не се добавя.","Влачи фигурите с пръст или мишка. Двойно докосване, колелцето на мишката или ⟲ ⟳ завърта; ⇋ обръща огледално; ⌫ връща фигурата в поставката.","По-тъмните фигури са зададени от предизвикателството и не се местят.","Жокерът поставя една фигура от познато решение. Клавиши: R — завъртане, F — огледало, Ctrl+Z — назад."],
+    note:"Неофициална фен версия, вдъхновена от IQ Link® на SmartGames. Само за лична употреба."},
+  en:{sub:"puzzle", new:"🎲 New", hint:"💡 Hint", help:"How to play",
+    challenge:"Challenge", of:"level",
+    remaining:n=>n===1?"1 piece left":`${n} pieces left`,
+    win:"Well done!", winText:(l,n)=>`Challenge #${n} solved (${l}).`,
+    winHints:h=>h?` Hints used: ${h}.`:" No hints!",
+    next:"Next ›", close:"Close", showSol:"Show solution",
+    locked:"This piece is fixed by the challenge",
+    hintPlaced:"Placed one piece from a solution.",
+    noHint:"No known solution matches this layout — the blinking pieces probably need to move.",
+    noHint2:"Nothing placed to check yet — just try!",
+    cantRotate:"No room to rotate here — other pieces are in the way",
+    revealed:"Full solution revealed.",
+    solved:"solved", freeName:"FREE PLAY",
+    levels:{starter:"STARTER", junior:"JUNIOR", expert:"EXPERT", master:"MASTER", wizard:"WIZARD", free:"FREE"},
+    rules:["Fit all 12 puzzle pieces on the board.","There are 36 puzzle parts but only 24 places: a ball may share a place with an open ring of another piece if the ring's opening points exactly along the ball's connecting arm.","Closed rings occupy their place entirely — nothing can be added there.","Drag pieces with finger or mouse. Double-tap, mouse wheel or ⟲ ⟳ rotates; ⇋ mirrors; ⌫ returns a piece to the tray.","Darker pieces are set by the challenge and cannot be moved.","The hint places one piece from a known solution. Keys: R — rotate, F — flip, Ctrl+Z — undo."],
+    note:"Unofficial fan version inspired by IQ Link® by SmartGames. Personal use only."}
+};
+
+/* ---------- storage ---------- */
+const LS = {
+  get(k,d){ try{ const v=localStorage.getItem("hl."+k); return v==null?d:JSON.parse(v);}catch(e){return d;} },
+  set(k,v){ try{ localStorage.setItem("hl."+k, JSON.stringify(v)); }catch(e){} },
+  del(k){ try{ localStorage.removeItem("hl."+k);}catch(e){} }
+};
+
+/* ---------- engine: directions, isometries ---------- */
+// dir indices: L=0 R=1 UL=2 UR=3 DL=4 DR=5, C=6
+const L=0,R=1,UL=2,UR=3,DL=4,DR=5,C=6;
+const DIRV=[[-1,0],[1,0],[0,-1],[1,-1],[-1,1],[0,1]];
+const ANTI=[1,0,5,4,3,2];
+const TICK=[2,5,3,1,0,4,6];          // rotate one step clockwise
+const FLIPP=[1,0,3,2,5,4,6];         // mirror left-right
+const IDP=[0,1,2,3,4,5,6];
+function compose(a,b){ const o=new Array(7); for(let s=0;s<7;s++)o[s]=a[b[s]]; return o; }
+// same construction & naming as bwesterb/iqlink common.py
+const ISOS=[]; // [name, perm]
+{ let cur=TICK;
+  for(let i=0;i<5;i++){ ISOS.push(["r".repeat(i+1),cur]); cur=compose(cur,TICK); }
+  ISOS.push(["I",IDP]);
+  cur=FLIPP;
+  for(let i=0;i<6;i++){ ISOS.push(["f"+"r".repeat(i),cur]); cur=compose(cur,TICK); }
+}
+const ISO_IDX={}; ISOS.forEach((x,i)=>ISO_IDX[x[0]]=i);
+const PERM_IDX={}; ISOS.forEach((x,i)=>PERM_IDX[x[1].join("")]=i);
+const isoCompose=(pa,pb)=>PERM_IDX[compose(ISOS[pa][1],ISOS[pb][1]).join("")];
+const ROT_R = iso=>isoCompose(PERM_IDX[TICK.join("")], iso);
+const ROT_L = iso=>{ let k=iso; for(let i=0;i<5;i++) k=ROT_R(k); return k; };
+const DO_FLIP = iso=>isoCompose(PERM_IDX[FLIPP.join("")], iso);
+
+/* ---------- engine: board ---------- */
+const CELLS=[];
+for(let q=1;q<=6;q++)CELLS.push([q,0]);
+for(let q=1;q<=6;q++)CELLS.push([q,1]);
+for(let q=0;q<=5;q++)CELLS.push([q,2]);
+for(let q=0;q<=5;q++)CELLS.push([q,3]);
+const CIDX={}; CELLS.forEach((c,i)=>CIDX[c[0]+","+c[1]]=i);
+
+/* ---------- engine: pieces ---------- */
+const bit=d=>1<<d, CBIT=1<<6, ALLD=63;
+const peg=d=>bit(ANTI[d])|CBIT;
+const hole=d=>ALLD&~bit(d);
+const wide=(a,b)=>ALLD&~bit(a)&~bit(b);
+const CLOSED=ALLD;
+const dpeg=(a,b)=>bit(a)|bit(b)|CBIT;
+// [offsetDir(6=center), slotMask]
+const PIECES={
+  "red-vee":[[C,hole(L)],[R,peg(R)],[DL,peg(DL)]],
+  "purple-vee":[[C,CLOSED],[R,hole(UL)],[DL,peg(DL)]],
+  "pink-vee":[[C,CLOSED],[R,hole(DL)],[DL,peg(DL)]],
+  "yellow-vee":[[C,CLOSED],[R,hole(R)],[DL,hole(DR)]],
+  "blue-vee":[[C,CLOSED],[R,hole(DR)],[DL,peg(DL)]],
+  "purple-line":[[L,peg(L)],[C,wide(UL,UR)],[R,peg(R)]],
+  "lime-line":[[UL,hole(DL)],[C,CLOSED],[DR,peg(DR)]],
+  "green-line":[[UL,hole(L)],[C,CLOSED],[DR,peg(DR)]],
+  "green-triangle":[[C,dpeg(DL,DR)],[DL,hole(DL)],[DR,peg(DR)]],
+  "orange-triangle":[[C,hole(UL)],[DL,peg(DL)],[DR,peg(DR)]],
+  "red-triangle":[[C,hole(UL)],[DL,peg(DL)],[DR,hole(UR)]],
+  "blue-triangle":[[C,dpeg(DL,DR)],[DL,hole(DR)],[DR,peg(DR)]]
+};
+const NAMES=Object.keys(PIECES); // 12, fixed order
+const EDGES={ // arms between offsets, for drawing
+  "red-vee":[[C,R],[C,DL]], "purple-vee":[[C,R],[C,DL]], "pink-vee":[[C,R],[C,DL]],
+  "yellow-vee":[[C,R],[C,DL]], "blue-vee":[[C,R],[C,DL]],
+  "purple-line":[[L,C],[C,R]], "lime-line":[[UL,C],[C,DR]], "green-line":[[UL,C],[C,DR]],
+  "green-triangle":[[C,DL],[C,DR]], "orange-triangle":[[C,DL],[C,DR]],
+  "red-triangle":[[C,DL],[C,DR]], "blue-triangle":[[C,DL],[C,DR]]
+};
+const COLORS={
+  "red-vee":"#e5484d","purple-vee":"#9557d8","pink-vee":"#f76ba8","yellow-vee":"#f2c522",
+  "blue-vee":"#3563e9","purple-line":"#bb8ef7","lime-line":"#a4d426","green-line":"#1e7d3c",
+  "green-triangle":"#5fc06a","orange-triangle":"#f98032","red-triangle":"#a51f42","blue-triangle":"#3fb9e8"
+};
+function permMask(mask,perm){
+  let m=mask&CBIT?CBIT:0;
+  for(let d=0;d<6;d++) if(mask&bit(d)) m|=bit(perm[d]);
+  return m;
+}
+// transformed piece cache: TP[name][isoIdx] = [[off',mask'],...]
+const TP={};
+for(const n of NAMES){
+  TP[n]=ISOS.map(([,perm])=>PIECES[n].map(([off,m])=>[off===C?C:perm[off], permMask(m,perm)]));
+}
+// unique orientations per piece (orbit) for the solver
+const ORBIT={};
+for(const n of NAMES){
+  const seen=new Set(); ORBIT[n]=[];
+  for(let k=0;k<12;k++){
+    const sig=TP[n][k].map(([o,m])=>o+":"+m).sort().join("|");
+    if(!seen.has(sig)){ seen.add(sig); ORBIT[n].push(k); }
+  }
+}
+function bitCells(name,isoIdx,aq,ar){ // -> [[cellIdx,mask],...] | null if off board
+  const out=[];
+  for(const [off,m] of TP[name][isoIdx]){
+    const q=off===C?aq:aq+DIRV[off][0], r=off===C?ar:ar+DIRV[off][1];
+    const ci=CIDX[q+","+r];
+    if(ci===undefined) return null;
+    out.push([ci,m]);
+  }
+  return out;
+}
+function canFit(slots,bc){ return bc!==null && bc.every(([ci,m])=>(slots[ci]&m)===0); }
+function placeSig(bc){ return bc.map(([ci,m])=>ci*128+m).sort((a,b)=>a-b).join(","); }
+
+/* piece stats (selftest): balls / open rings / closed rings */
+function pieceStats(){
+  let balls=0,open=0,closed=0;
+  for(const n of NAMES) for(const [,m] of PIECES[n]){
+    if(m&CBIT) balls++;
+    else if(m===CLOSED) closed++;
+    else open++;
+  }
+  return {balls,open,closed};
+}
+/* ---------- geometry ---------- */
+const S=96, HY=S*0.8660254, MX=70, MY=64;
+const cellPx=(q,r)=>[MX+(q+r/2-1)*S, MY+r*HY];
+const offPx=off=>off===C?[0,0]:[(DIRV[off][0]+DIRV[off][1]/2)*S, DIRV[off][1]*HY];
+const ANGD=[180,0,240,300,120,60];
+const VW=660, VH=618, TRAY_Y=372;
+const TRAY_CX=i=>58+(i%6)*108.8, TRAY_CY=i=>(i<6?428:547);
+
+/* ---------- svg scaffolding ---------- */
+const svg=document.getElementById("svg");
+const NS="http://www.w3.org/2000/svg";
+const el=(t,attrs,parent)=>{ const e=document.createElementNS(NS,t);
+  for(const k in attrs) e.setAttribute(k,attrs[k]);
+  if(parent) parent.appendChild(e); return e; };
+svg.setAttribute("viewBox",`0 0 ${VW} ${VH}`);
+
+function shade(hex,f){ // f>0 lighten toward white, f<0 darken
+  const n=parseInt(hex.slice(1),16); let r=n>>16,g=(n>>8)&255,b=n&255;
+  const t=f>0?255:0, a=Math.abs(f);
+  r=Math.round(r+(t-r)*a); g=Math.round(g+(t-g)*a); b=Math.round(b+(t-b)*a);
+  return `rgb(${r},${g},${b})`;
+}
+const defs=el("defs",{},svg);
+for(const n of NAMES){
+  const g=el("radialGradient",{id:"g-"+n,cx:"35%",cy:"30%",r:"75%"},defs);
+  el("stop",{offset:"0%","stop-color":shade(COLORS[n],.55)},g);
+  el("stop",{offset:"55%","stop-color":COLORS[n]},g);
+  el("stop",{offset:"100%","stop-color":shade(COLORS[n],-.3)},g);
+}
+{ const f=el("filter",{id:"fGlow",x:"-40%",y:"-40%",width:"180%",height:"180%"},defs);
+  el("feDropShadow",{dx:0,dy:0,stdDeviation:7,"flood-color":"#ffd166","flood-opacity":.85},f);
+  const f2=el("filter",{id:"fDrag",x:"-40%",y:"-40%",width:"180%",height:"180%"},defs);
+  el("feDropShadow",{dx:0,dy:7,stdDeviation:7,"flood-color":"#000","flood-opacity":.5},f2);
+  const f3=el("filter",{id:"fLock"},defs);
+  el("feColorMatrix",{type:"saturate",values:"0.45"},f3);
+}
+const gBoard=el("g",{},svg), gTrayBg=el("g",{},svg), gPieces=el("g",{},svg),
+      gTray=el("g",{},svg), gFloat=el("g",{class:"floating"},svg);
+
+/* board backdrop + sockets */
+el("rect",{x:8,y:6,width:644,height:356,rx:26,fill:"#10142b",stroke:"#272f57","stroke-width":2},gBoard);
+el("rect",{x:14,y:12,width:632,height:344,rx:21,fill:"none",stroke:"#1b2246","stroke-width":1.5},gBoard);
+const SOCKELS=CELLS.map(([q,r])=>{
+  const [x,y]=cellPx(q,r);
+  return el("circle",{cx:x,cy:y,r:30,class:"sock"},gBoard);
+});
+/* tray slots */
+const TRAYSLOT=NAMES.map((n,i)=>el("rect",{x:TRAY_CX(i)-52,y:TRAY_CY(i)-55,width:104,height:110,rx:14,class:"trayslot"},gTrayBg));
+
+/* ---------- piece drawing ---------- */
+function ringCircle(g,rad,sw,stroke,opac,gapDeg,angDeg){
+  const c=el("circle",{cx:0,cy:0,r:rad,fill:"none",stroke:stroke,"stroke-width":sw,"stroke-opacity":opac},g);
+  if(gapDeg>0){
+    c.setAttribute("pathLength","360");
+    c.setAttribute("stroke-dasharray",`${360-gapDeg} ${gapDeg}`);
+    c.setAttribute("transform",`rotate(${angDeg+gapDeg/2})`);
+  }
+  return c;
+}
+function drawPiece(name,isoIdx){
+  const g=el("g",{"data-piece":name});
+  const bits=TP[name][isoIdx];
+  const maskAt={}; bits.forEach(([o,m])=>maskAt[o]=m);
+  const perm=ISOS[isoIdx][1], col=COLORS[name];
+  // arms
+  for(const [a,b] of EDGES[name]){
+    const a2=a===C?C:perm[a], b2=b===C?C:perm[b];
+    let [x1,y1]=offPx(a2), [x2,y2]=offPx(b2);
+    const dx=x2-x1, dy=y2-y1, len=Math.hypot(dx,dy), ux=dx/len, uy=dy/len;
+    const trimA=(maskAt[a2]&CBIT)?0:27, trimB=(maskAt[b2]&CBIT)?0:27;
+    const ax=x1+ux*trimA, ay=y1+uy*trimA, bx=x2-ux*trimB, by=y2-uy*trimB;
+    el("line",{x1:ax,y1:ay,x2:bx,y2:by,stroke:"#000","stroke-width":15,"stroke-linecap":"round","stroke-opacity":.30},g);
+    el("line",{x1:ax,y1:ay,x2:bx,y2:by,stroke:col,"stroke-width":10.5,"stroke-linecap":"round"},g);
+    el("line",{x1:ax,y1:ay,x2:bx,y2:by,stroke:shade(col,.45),"stroke-width":3,"stroke-linecap":"round","stroke-opacity":.5},g);
+  }
+  // units
+  for(const [off,m] of bits){
+    const [x,y]=offPx(off);
+    const u=el("g",{transform:`translate(${x},${y})`},g);
+    el("circle",{cx:0,cy:0,r:29,fill:"transparent"},u); // generous touch target
+    if(m&CBIT){ // ball
+      el("circle",{cx:0,cy:0,r:17.5,fill:`url(#g-${name})`,stroke:"rgba(0,0,0,.45)","stroke-width":1.2},u);
+      el("ellipse",{cx:-5,cy:-7,rx:6.5,ry:4,fill:"#fff",opacity:.45},u);
+    }else{
+      let gap=0,ang=0;
+      const missing=[]; for(let d=0;d<6;d++) if(!(m&bit(d))) missing.push(d);
+      if(missing.length===1){ gap=80; ang=ANGD[missing[0]]; }
+      else if(missing.length===2){
+        gap=142;
+        let vx=0,vy=0;
+        for(const d of missing){ vx+=Math.cos(ANGD[d]*Math.PI/180); vy+=Math.sin(ANGD[d]*Math.PI/180); }
+        ang=Math.atan2(vy,vx)*180/Math.PI;
+      }
+      ringCircle(u,24,3,"#000",.30,gap,ang).setAttribute("stroke-width",16.5);
+      ringCircle(u,24,13.5,col,1,gap,ang);
+      ringCircle(u,24,3.5,shade(col,.45),.5,gap,ang).setAttribute("transform",
+        (gap>0?`rotate(${ang+gap/2}) `:"")+"translate(0,0)");
+      // subtle top highlight ring
+      const hl=ringCircle(u,27.5,2,"#fff",.16,gap,ang);
+      if(gap>0) hl.setAttribute("transform",`rotate(${ang+gap/2})`);
+    }
+  }
+  return g;
+}
+function pieceBBoxCenter(name,isoIdx){
+  let minx=1e9,miny=1e9,maxx=-1e9,maxy=-1e9;
+  for(const [off] of TP[name][isoIdx]){
+    const [x,y]=offPx(off);
+    minx=Math.min(minx,x-31); maxx=Math.max(maxx,x+31);
+    miny=Math.min(miny,y-31); maxy=Math.max(maxy,y+31);
+  }
+  return [(minx+maxx)/2,(miny+maxy)/2,maxx-minx,maxy-miny];
+}
+/* ---------- game state ---------- */
+const LEVELS={starter:{K:9},junior:{K:8},expert:{K:6},master:{K:4},wizard:{K:2},free:{K:0}};
+const LORDER=["starter","junior","expert","master","wizard","free"];
+const st={
+  lang:LS.get("lang","bg"),
+  level:LS.get("level","starter"),
+  nums:LS.get("nums",{}),
+  solved:LS.get("solved",{}),
+  board:{}, slots:new Uint8Array(24),
+  trayIso:{}, selected:null, undo:[],
+  hintsUsed:0, revealed:false, ch:null
+};
+const T=()=>I18N[st.lang];
+let EMB=[];           // embedded solutions [{byName:{n:[iso,q,r]}, sigs:{n:sig}}]
+let EXTRA=[];         // solutions found by the background solver
+let allSigSet=new Set();
+const allSolutions=()=>EMB.concat(EXTRA);
+
+function addPiece(name,iso,q,r,locked){
+  const bc=bitCells(name,iso,q,r);
+  for(const [ci,m] of bc) st.slots[ci]|=m;
+  st.board[name]={iso,q,r,locked:!!locked};
+}
+function removePiece(name){
+  const p=st.board[name];
+  const bc=bitCells(name,p.iso,p.q,p.r);
+  for(const [ci,m] of bc) st.slots[ci]&=~m;
+  delete st.board[name];
+}
+const boardSig=name=>{const p=st.board[name];return placeSig(bitCells(name,p.iso,p.q,p.r));};
+const placedCount=()=>Object.keys(st.board).length;
+
+/* ---------- rendering ---------- */
+const PIECE_EL={};
+function renderPlaced(){
+  gPieces.innerHTML="";
+  const names=Object.keys(st.board).sort((a,b)=>{
+    const A=st.board[a],B=st.board[b];
+    if(A.locked!==B.locked) return A.locked?-1:1;
+    if(a===st.selected) return 1; if(b===st.selected) return -1;
+    return 0;
+  });
+  for(const n of names){
+    const p=st.board[n];
+    const g=drawPiece(n,p.iso);
+    const [x,y]=cellPx(p.q,p.r);
+    g.setAttribute("transform",`translate(${x},${y})`);
+    if(p.locked){ g.setAttribute("filter","url(#fLock)"); g.setAttribute("data-locked","1"); }
+    else if(n===st.selected) g.setAttribute("filter","url(#fGlow)");
+    gPieces.appendChild(g); PIECE_EL[n]=g;
+  }
+}
+function renderTray(){
+  gTray.innerHTML="";
+  NAMES.forEach((n,i)=>{
+    const inTray=!st.board[n] && !(drag&&drag.name===n);
+    TRAYSLOT[i].setAttribute("class","trayslot"+(inTray&&n===st.selected?" sel":""));
+    TRAYSLOT[i].setAttribute("opacity",inTray?1:.45);
+    if(!inTray) return;
+    const iso=st.trayIso[n]??ISO_IDX.I;
+    const g=drawPiece(n,iso);
+    const [cx,cy]=pieceBBoxCenter(n,iso), sc=.40;
+    g.setAttribute("transform",`translate(${TRAY_CX(i)-cx*sc},${TRAY_CY(i)-cy*sc}) scale(${sc})`);
+    gTray.appendChild(g);
+  });
+}
+function clearHl(){ SOCKELS.forEach(s=>s.setAttribute("class","sock")); }
+function renderAll(){
+  renderPlaced(); renderTray(); updateHud(); persistProgress();
+}
+
+/* ---------- HUD ---------- */
+const $=id=>document.getElementById(id);
+function levelLabel(k){
+  const t=T(); const s=st.solved[k]?Object.keys(st.solved[k]).length:0;
+  return (k==="free"?t.freeName:t.levels[k])+(s?` ✓${s}`:"");
+}
+function updateHud(){
+  const t=T();
+  $("chNum").textContent="№"+(st.ch?st.ch.num:1);
+  const sel=$("levelSel");
+  if(sel.options.length!==LORDER.length) {
+    sel.innerHTML=""; LORDER.forEach(k=>{const o=document.createElement("option");o.value=k;sel.appendChild(o);});
+  }
+  LORDER.forEach((k,i)=>{sel.options[i].textContent=levelLabel(k);});
+  sel.value=st.level;
+  const done=st.ch&&st.solved[st.level]&&st.solved[st.level][st.ch.num];
+  const left=12-placedCount();
+  $("status").textContent=st.ch?
+    `${t.challenge} №${st.ch.num} · ${levelLabel(st.level).replace(/ ✓\d+$/,"")}${done?" ✓":""} · ${t.remaining(left)}`:"";
+  const selPiece=st.selected, onBoard=selPiece&&st.board[selPiece];
+  const can=selPiece&&(!onBoard||!st.board[selPiece].locked);
+  ["btnRotL","btnRotR","btnFlip"].forEach(b=>$(b).disabled=!can);
+  $("btnRem").disabled=!(onBoard&&!st.board[selPiece].locked);
+  $("btnUndo").disabled=!st.undo.length;
+}
+let toastTimer=null;
+function toast(msg){
+  const el=$("toast"); el.textContent=msg; el.classList.remove("hidden");
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.classList.add("hidden"),2600);
+}
+
+/* ---------- persistence of in-progress board ---------- */
+function persistProgress(){
+  if(!st.ch) return;
+  const pieces={};
+  for(const n in st.board) if(!st.board[n].locked){ const p=st.board[n]; pieces[n]=[p.iso,p.q,p.r]; }
+  LS.set(`state.${st.level}.${st.ch.num}`,{pieces});
+}
+
+/* ---------- undo ---------- */
+function pushUndo(e){ st.undo.push(e); if(st.undo.length>150) st.undo.shift(); }
+function undoAct(){
+  const e=st.undo.pop(); if(!e) return;
+  if(e.to && st.board[e.name] && !st.board[e.name].locked) removePiece(e.name);
+  if(e.from) { if(canFit(st.slots,bitCells(e.name,e.from.iso,e.from.q,e.from.r))) addPiece(e.name,e.from.iso,e.from.q,e.from.r,false); }
+  st.selected=null; renderAll();
+}
+
+/* ---------- interaction ---------- */
+let drag=null, lastTap={t:0,name:null}, floatG=null, lastPt=null;
+function svgPt(e){
+  const p=svg.createSVGPoint(); p.x=e.clientX; p.y=e.clientY;
+  return p.matrixTransform(svg.getScreenCTM().inverse());
+}
+function startFloat(){
+  gFloat.innerHTML="";
+  floatG=drawPiece(drag.name,drag.iso);
+  floatG.setAttribute("filter","url(#fDrag)");
+  gFloat.appendChild(floatG);
+}
+function moveFloat(pt){
+  const ax=pt.x-drag.gx, ay=pt.y-drag.gy;
+  floatG.setAttribute("transform",`translate(${ax},${ay})`);
+  clearHl(); drag.target=null;
+  let best=null,bd=1e9;
+  for(let i=0;i<24;i++){
+    const [x,y]=cellPx(CELLS[i][0],CELLS[i][1]);
+    const d=Math.hypot(x-ax,y-ay);
+    if(d<bd){bd=d;best=i;}
+  }
+  if(bd>S*.72) return;
+  const [q,r]=CELLS[best];
+  const bc=bitCells(drag.name,drag.iso,q,r);
+  if(bc===null) return;
+  const ok=canFit(st.slots,bc);
+  for(const [ci] of bc) SOCKELS[ci].setAttribute("class","sock "+(ok?"hlok":"hlbad"));
+  drag.target={q,r,valid:ok};
+}
+svg.addEventListener("pointerdown",e=>{
+  if(drag) return; // ignore a second finger while dragging
+  if(!$("modal").classList.contains("hidden")) return;
+  e.preventDefault();
+  const tEl=e.target.closest ? e.target.closest("[data-piece]") : null;
+  if(!tEl){ st.selected=null; renderAll(); return; }
+  const name=tEl.getAttribute("data-piece");
+  const pt=svgPt(e); lastPt=pt;
+  if(st.board[name]){
+    if(st.board[name].locked){ toast(T().locked); return; }
+    const p=st.board[name];
+    const [ax,ay]=cellPx(p.q,p.r);
+    drag={name,iso:p.iso,from:{iso:p.iso,q:p.q,r:p.r},fromBoard:true,moved:false,
+          startX:pt.x,startY:pt.y,gx:pt.x-ax,gy:pt.y-ay,target:null};
+    removePiece(name);
+  }else{
+    const iso=st.trayIso[name]??ISO_IDX.I;
+    drag={name,iso,from:null,fromBoard:false,moved:false,startX:pt.x,startY:pt.y,
+          gx:0,gy:e.pointerType==="touch"?60:12,target:null};
+  }
+  try{svg.setPointerCapture(e.pointerId);}catch(_){}
+  st.selected=name;
+  startFloat();
+  if(drag.fromBoard){ const [ax,ay]=cellPx(drag.from.q,drag.from.r); floatG.setAttribute("transform",`translate(${ax},${ay})`); }
+  else moveFloat(pt);
+  renderAll();
+});
+svg.addEventListener("pointermove",e=>{
+  if(!drag) return;
+  e.preventDefault();
+  const pt=svgPt(e); lastPt=pt;
+  if(!drag.moved && Math.hypot(pt.x-drag.startX,pt.y-drag.startY)>8) drag.moved=true;
+  if(drag.moved) moveFloat(pt);
+});
+function endDrag(e){
+  if(!drag) return;
+  const d=drag; drag=null; clearHl(); gFloat.innerHTML=""; floatG=null;
+  const pt=lastPt;
+  if(!d.moved){
+    if(d.fromBoard) addPiece(d.name,d.from.iso,d.from.q,d.from.r,false);
+    const now=Date.now();
+    if(lastTap.name===d.name && now-lastTap.t<340){ lastTap={t:0,name:null}; rotateSel(1); return; }
+    lastTap={t:now,name:d.name};
+    renderAll(); return;
+  }
+  if(d.target && d.target.valid){
+    addPiece(d.name,d.iso,d.target.q,d.target.r,false);
+    pushUndo({name:d.name,from:d.from,to:{iso:d.iso,q:d.target.q,r:d.target.r}});
+    renderAll(); checkWin(); return;
+  }
+  if(d.fromBoard){
+    if(pt && pt.y>TRAY_Y-4){ st.trayIso[d.name]=d.iso; pushUndo({name:d.name,from:d.from,to:null}); }
+    else addPiece(d.name,d.from.iso,d.from.q,d.from.r,false);
+  }
+  renderAll();
+}
+svg.addEventListener("pointerup",endDrag);
+svg.addEventListener("pointercancel",endDrag);
+svg.addEventListener("wheel",e=>{
+  e.preventDefault();
+  if(drag){ drag.iso=e.deltaY>0?ROT_R(drag.iso):ROT_L(drag.iso); startFloat(); if(lastPt) moveFloat(lastPt); }
+  else if(st.selected) rotateSel(e.deltaY>0?1:-1);
+},{passive:false});
+function rotateSel(dir){ // 1=cw, -1=ccw, 0=flip
+  const name=st.selected; if(!name) return;
+  if(st.board[name]){
+    const p=st.board[name];
+    if(p.locked){ toast(T().locked); return; }
+    const ni=dir===0?DO_FLIP(p.iso):(dir>0?ROT_R(p.iso):ROT_L(p.iso));
+    removePiece(name);
+    const bc=bitCells(name,ni,p.q,p.r);
+    if(canFit(st.slots,bc)){
+      addPiece(name,ni,p.q,p.r,false);
+      pushUndo({name,from:{iso:p.iso,q:p.q,r:p.r},to:{iso:ni,q:p.q,r:p.r}});
+    }else{
+      addPiece(name,p.iso,p.q,p.r,false);
+      toast(T().cantRotate);
+    }
+  }else{
+    const cur=st.trayIso[name]??ISO_IDX.I;
+    st.trayIso[name]=dir===0?DO_FLIP(cur):(dir>0?ROT_R(cur):ROT_L(cur));
+  }
+  renderAll();
+}
+document.addEventListener("keydown",e=>{
+  if(e.key==="r"||e.key==="R") rotateSel(1);
+  else if(e.key==="f"||e.key==="F") rotateSel(0);
+  else if(e.key==="Escape"){ st.selected=null; renderAll(); }
+  else if((e.ctrlKey||e.metaKey)&&(e.key==="z"||e.key==="Z")){ e.preventDefault(); undoAct(); }
+});
+/* ---------- challenges ---------- */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function chSeed(level,num){ return ((LORDER.indexOf(level)+1)*100003 + num*7919 + 1234567)>>>0; }
+function shuffled(arr,rng){ const a=arr.slice(); for(let i=a.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; }
+function countExt(subset,sol){
+  let c=0;
+  for(const E of EMB){
+    let ok=true;
+    for(const n of subset) if(E.sigs[n]!==sol.sigs[n]){ok=false;break;}
+    if(ok) c++;
+  }
+  return c;
+}
+function genChallenge(level,num){
+  const key=`ch.${level}.${num}`;
+  const cached=LS.get(key,null);
+  if(cached && cached.solIdx<EMB.length && Array.isArray(cached.locked)
+     && cached.locked.every(n=>NAMES.includes(n))) return {level,num,...cached};
+  const rng=mulberry32(chSeed(level,num));
+  const solIdx=Math.floor(rng()*EMB.length);
+  const K=LEVELS[level].K;
+  let locked=[];
+  if(K>0){
+    const sol=EMB[solIdx];
+    let best=null,bestC=1e9;
+    for(let t=0;t<260;t++){
+      const sub=shuffled(NAMES,rng).slice(0,K);
+      const c=countExt(sub,sol);
+      if(c<bestC){bestC=c;best=sub;}
+      if(c===1) break;
+    }
+    locked=best;
+  }
+  const ch={solIdx,locked};
+  LS.set(key,ch);
+  return {level,num,...ch};
+}
+function loadChallenge(level,num){
+  num=Math.max(1,num|0);
+  st.board={}; st.slots.fill(0); st.undo=[]; st.selected=null;
+  st.hintsUsed=0; st.revealed=false; st.trayIso={};
+  st.level=level; st.nums[level]=num;
+  LS.set("level",level); LS.set("nums",st.nums);
+  st.ch=genChallenge(level,num);
+  const sol=EMB[st.ch.solIdx];
+  for(const n of st.ch.locked){
+    const [iso,q,r]=sol.byName[n];
+    addPiece(n,iso,q,r,true);
+  }
+  const saved=LS.get(`state.${level}.${num}`,null);
+  if(saved&&saved.pieces){
+    for(const n in saved.pieces){
+      if(st.board[n]||!NAMES.includes(n)) continue;
+      const [iso,q,r]=saved.pieces[n];
+      const bc=bitCells(n,iso,q,r);
+      if(bc&&canFit(st.slots,bc)) addPiece(n,iso,q,r,false);
+    }
+  }
+  renderAll();
+}
+function checkWin(){
+  if(placedCount()<12) return;
+  if(st.revealed) return;
+  const lv=st.level,num=st.ch.num;
+  if(!st.solved[lv]) st.solved[lv]={};
+  st.solved[lv][num]=1; LS.set("solved",st.solved);
+  showWin();
+}
+
+/* ---------- hint ---------- */
+function matchAll(T0,names){ for(const n of names){ if(T0.sigs[n]!==boardSig(n)) return false; } return true; }
+function hint(){
+  if(!st.ch) return;
+  const lockedN=Object.keys(st.board).filter(n=>st.board[n].locked);
+  const playerN=Object.keys(st.board).filter(n=>!st.board[n].locked);
+  if(placedCount()===12) return;
+  const pool=allSolutions().filter(T0=>matchAll(T0,lockedN));
+  const full=pool.filter(T0=>matchAll(T0,playerN));
+  if(full.length){
+    const seed=EMB[st.ch.solIdx];
+    const T0=full.includes(seed)?seed:full[0];
+    const next=NAMES.find(n=>!st.board[n]);
+    const [iso,q,r]=T0.byName[next];
+    addPiece(next,iso,q,r,false);
+    pushUndo({name:next,from:null,to:{iso,q,r}});
+    st.hintsUsed++; st.selected=next;
+    toast(T().hintPlaced); renderAll(); checkWin();
+  }else{
+    let suspects=playerN.filter(n=>!pool.some(T0=>T0.sigs[n]===boardSig(n)));
+    if(!suspects.length) suspects=playerN;
+    st.hintsUsed++;
+    renderAll();
+    for(const n of suspects){
+      const g=PIECE_EL[n];
+      if(g&&g.animate) g.animate([{opacity:1},{opacity:.15},{opacity:1}],{duration:400,iterations:3});
+    }
+    toast(playerN.length?T().noHint:T().noHint2);
+  }
+}
+function showSolution(){
+  if(!st.ch) return;
+  st.revealed=true;
+  for(const n of Object.keys(st.board)) if(!st.board[n].locked) removePiece(n);
+  const sol=EMB[st.ch.solIdx];
+  for(const n of NAMES) if(!st.board[n]){
+    const [iso,q,r]=sol.byName[n];
+    addPiece(n,iso,q,r,false);
+  }
+  st.undo=[]; st.selected=null;
+  closeModal(); renderAll(); toast(T().revealed);
+}
+
+/* ---------- modals ---------- */
+function openModal(html){ $("modalCard").innerHTML=html; $("modal").classList.remove("hidden"); }
+function closeModal(){ $("modal").classList.add("hidden"); }
+$("modal").addEventListener("pointerdown",e=>{ if(e.target.id==="modal") closeModal(); });
+function showWin(){
+  const t=T();
+  const lvName=st.level==="free"?t.freeName:t.levels[st.level];
+  openModal(`<div class="bigwin">🎉</div><h2>${t.win}</h2>
+    <p>${t.winText(lvName,st.ch.num)}${t.winHints(st.hintsUsed)}</p>
+    <div class="btns"><button class="primary" id="mNext">${t.next}</button>
+    <button id="mClose">${t.close}</button></div>`);
+  $("mNext").onclick=()=>{ closeModal(); loadChallenge(st.level,st.ch.num+1); };
+  $("mClose").onclick=closeModal;
+}
+function showHelp(){
+  const t=T();
+  openModal(`<h2>${t.help}</h2><ul>${t.rules.map(r=>`<li>${r}</li>`).join("")}</ul>
+    <div class="btns"><button id="mSol">${t.showSol}</button>
+    <button class="primary" id="mClose">${t.close}</button></div>
+    <p class="note">${t.note}</p>`);
+  $("mSol").onclick=showSolution;
+  $("mClose").onclick=closeModal;
+}
+
+/* ---------- language & controls ---------- */
+function applyLang(){
+  const t=T();
+  document.documentElement.lang=st.lang;
+  $("subT").textContent=t.sub;
+  $("btnNew").textContent=t.new;
+  $("btnHint").textContent=t.hint;
+  $("btnLang").textContent=st.lang==="bg"?"EN":"БГ";
+  $("btnHelp").title=t.help;
+  updateHud();
+}
+$("btnLang").onclick=()=>{ st.lang=st.lang==="bg"?"en":"bg"; LS.set("lang",st.lang); applyLang(); };
+$("btnHelp").onclick=showHelp;
+$("btnHint").onclick=hint;
+$("btnUndo").onclick=undoAct;
+$("btnRotL").onclick=()=>rotateSel(-1);
+$("btnRotR").onclick=()=>rotateSel(1);
+$("btnFlip").onclick=()=>rotateSel(0);
+$("btnRem").onclick=()=>{
+  const n=st.selected;
+  if(!n||!st.board[n]||st.board[n].locked) return;
+  const p=st.board[n];
+  removePiece(n); st.trayIso[n]=p.iso;
+  pushUndo({name:n,from:{iso:p.iso,q:p.q,r:p.r},to:null});
+  st.selected=null; renderAll();
+};
+$("btnNew").onclick=()=>{
+  const rng=mulberry32((Date.now()&0xffffff)>>>0);
+  let n; do{ n=1+Math.floor(rng()*400); }while(st.ch&&n===st.ch.num);
+  loadChallenge(st.level,n);
+};
+$("chPrev").onclick=()=>{ if(st.ch&&st.ch.num>1) loadChallenge(st.level,st.ch.num-1); };
+$("chNext").onclick=()=>{ if(st.ch) loadChallenge(st.level,st.ch.num+1); };
+$("levelSel").onchange=e=>{ const k=e.target.value; loadChallenge(k,st.nums[k]||1); };
+/* ---------- background exhaustive solver (enriches the solution DB) ---------- */
+const SCORE2=NAMES.map(n=>PIECES[n].reduce((s,[,m])=>s+(m===CLOSED?2:1),0));
+const ALLPLACE=NAMES.map(n=>{
+  const out=[];
+  for(const k of ORBIT[n]) for(const [q,r] of CELLS){
+    const bc=bitCells(n,k,q,r);
+    if(bc) out.push({bc,iso:k,q,r});
+  }
+  return out;
+});
+let enumStack=null, enumNodes=0, enumFound=0;
+const enumRng=mulberry32((Date.now()^performance.now()*997)>>>0); // fresh subtree order each session
+function chooseCand(slots,used){
+  let bestPi=-1,bestList=null;
+  for(let pi=0;pi<12;pi++){
+    if(used&(1<<pi)) continue;
+    const list=[];
+    for(const p of ALLPLACE[pi]) if(canFit(slots,p.bc)) list.push(p);
+    if(!list.length) return null;
+    if(!bestList||list.length<bestList.length){ bestList=list; bestPi=pi; if(list.length===1) break; }
+  }
+  for(let i=bestList.length-1;i>0;i--){ const j=Math.floor(enumRng()*(i+1)); [bestList[i],bestList[j]]=[bestList[j],bestList[i]]; }
+  return {pi:bestPi,list:bestList};
+}
+function solFullSig(sigs){ return NAMES.map(n=>sigs[n]).join(";"); }
+function recordSolution(moves){
+  const byName={},sigs={};
+  for(const [pi,iso,q,r] of moves){
+    const n=NAMES[pi];
+    byName[n]=[iso,q,r];
+    sigs[n]=placeSig(bitCells(n,iso,q,r));
+  }
+  const full=solFullSig(sigs);
+  if(!allSigSet.has(full)){
+    allSigSet.add(full);
+    EXTRA.push({byName,sigs});
+    if(EXTRA.length%10===0) saveExtra();
+  }
+}
+function saveExtra(){ LS.set("enum.sols",EXTRA.map(s=>NAMES.map(n=>s.byName[n]))); }
+function loadExtra(){
+  const arr=LS.get("enum.sols",[]);
+  for(const a of arr){
+    try{
+      const byName={},sigs={};
+      NAMES.forEach((n,i)=>{ byName[n]=a[i]; sigs[n]=placeSig(bitCells(n,a[i][0],a[i][1],a[i][2])); });
+      const full=solFullSig(sigs);
+      if(!allSigSet.has(full)){ allSigSet.add(full); EXTRA.push({byName,sigs}); }
+    }catch(e){}
+  }
+}
+function enumFinish(complete){
+  if(complete){
+    LS.set("enumDone",true);
+    console.log(`[ENUM] COMPLETE nodes=${enumNodes} found=${enumFound} distinct=${allSigSet.size} (reference repo reports 472)`);
+  }else console.warn(`[ENUM] stopped incomplete at nodes=${enumNodes} distinct=${allSigSet.size}`);
+  saveExtra(); enumStack=null;
+}
+function enumTick(){
+  if(!enumStack) return;
+  const t0=performance.now();
+  while(performance.now()-t0<12){
+    if(!enumStack.length){ enumFinish(true); return; }
+    const f=enumStack[enumStack.length-1];
+    if(f.ci>=f.cand.length){ enumStack.pop(); continue; }
+    const c=f.cand[f.ci++];
+    const slots2=f.slots.slice();
+    let touched2=f.touched;
+    for(const [ci2,m] of c.bc){ if(slots2[ci2]===0) touched2++; slots2[ci2]|=m; }
+    const used2=f.used|(1<<f.pi);
+    const moves2=f.moves.concat([[f.pi,c.iso,c.q,c.r]]);
+    if(used2===4095){ enumFound++; recordSolution(moves2); continue; }
+    let rem=0;
+    for(let pi=0;pi<12;pi++) if(!(used2&(1<<pi))) rem+=SCORE2[pi];
+    // sound capacity bound: empty cells hold 2 half-units, half-filled cells 1 more
+    let halfLeft=0;
+    for(let ci2=0;ci2<24;ci2++){ const v=slots2[ci2]; if(v!==0&&v!==63&&v!==127) halfLeft++; }
+    if(rem>2*(24-touched2)+halfLeft) continue;
+    const nxt=chooseCand(slots2,used2);
+    if(!nxt) continue;
+    enumStack.push({used:used2,slots:slots2,touched:touched2,pi:nxt.pi,cand:nxt.list,ci:0,moves:moves2});
+    enumNodes++;
+    if(enumNodes%25000===0) console.log(`[ENUM] nodes=${enumNodes} found=${enumFound} distinct=${allSigSet.size}`);
+    if(enumNodes>4e6){ enumFinish(false); return; }
+  }
+  setTimeout(enumTick,50);
+}
+function startEnum(){
+  if(LS.get("enumDone",false)){ console.log(`[ENUM] cached complete DB: distinct=${allSigSet.size}`); return; }
+  const slots0=new Uint8Array(24);
+  const nxt=chooseCand(slots0,0);
+  enumStack=[{used:0,slots:slots0,touched:0,pi:nxt.pi,cand:nxt.list,ci:0,moves:[]}];
+  console.log("[ENUM] background enumeration started");
+  setTimeout(enumTick,50);
+}
+
+/* ---------- selftest (console only) ---------- */
+window.addEventListener("error",e=>console.error("[JSERR]",e.message,e.filename?"":"",e.lineno||""));
+function selftest(parsedInfo){
+  const res=[];
+  const chk=(name,ok,extra)=>{ res.push([name,ok]); console[ok?"log":"error"](`[SELFTEST] ${name}: ${ok?"OK":"FAIL"}${extra?" — "+extra:""}`); };
+  const stt=pieceStats();
+  chk("piece stats 16/14/6", stt.balls===16&&stt.open===14&&stt.closed===6,
+      `balls=${stt.balls} open=${stt.open} closed=${stt.closed}`);
+  chk("isometries", ISOS.length===12 && new Set(ISOS.map(i=>i[1].join(""))).size===12);
+  chk("board cells", CELLS.length===24);
+  chk(`embedded solutions parsed (${parsedInfo.ok}/${parsedInfo.total})`, parsedInfo.ok>=50 && parsedInfo.bad===0,
+      `bad=${parsedInfo.bad}`);
+  let genOK=true, uniq=0;
+  for(const lv of LORDER){
+    const c=genChallenge(lv,3);
+    if(c.locked.length!==LEVELS[lv].K){ genOK=false; break; }
+    const sol=EMB[c.solIdx];
+    const tmp=new Uint8Array(24);
+    for(const n of c.locked){
+      const bc=bitCells(n,sol.byName[n][0],sol.byName[n][1],sol.byName[n][2]);
+      if(!canFit(tmp,bc)){ genOK=false; break; }
+      for(const [ci,m] of bc) tmp[ci]|=m;
+    }
+    if(c.locked.length&&countExt(c.locked,sol)===1) uniq++;
+  }
+  chk("challenge generation (all levels)", genOK, `unique among known: ${uniq}/5 levels`);
+  const allOK=res.every(r=>r[1]);
+  console.log(allOK?"[SELFTEST] ALL OK":"[SELFTEST] FAILURES PRESENT");
+  return allOK;
+}
+
+/* ---------- embedded solutions (bwesterb/iqlink, 63 of 472) ---------- */
+const RAW=`
+[["red-vee", "frrrrr", [4, 2]], ["purple-vee", "rrrrr", [5, 2]], ["pink-vee", "frrr", [4, 3]], ["yellow-vee", "frrrr", [1, 3]], ["blue-vee", "fr", [5, 0]], ["purple-line", "rrrrr", [3, 1]], ["lime-line", "frrrrr", [3, 0]], ["green-line", "frr", [2, 1]], ["green-triangle", "fr", [1, 0]], ["orange-triangle", "fr", [0, 2]], ["red-triangle", "rrrr", [5, 1]], ["blue-triangle", "rrrr", [2, 3]]]
+[["red-vee", "frrrrr", [4, 2]], ["purple-vee", "rrrrr", [5, 2]], ["pink-vee", "frrr", [4, 3]], ["yellow-vee", "frrrr", [1, 3]], ["blue-vee", "fr", [5, 0]], ["purple-line", "rrrrr", [3, 1]], ["lime-line", "frrrrr", [3, 0]], ["green-line", "frr", [2, 1]], ["green-triangle", "fr", [1, 0]], ["orange-triangle", "rrrrr", [0, 2]], ["red-triangle", "rrrr", [5, 1]], ["blue-triangle", "rrrr", [2, 3]]]
+[["red-vee", "frrrrr", [2, 2]], ["purple-vee", "frrr", [4, 2]], ["pink-vee", "frrr", [2, 3]], ["yellow-vee", "I", [3, 0]], ["blue-vee", "frrr", [0, 3]], ["purple-line", "rrr", [4, 1]], ["lime-line", "fr", [3, 2]], ["green-line", "frrrrr", [5, 0]], ["green-triangle", "frrrr", [6, 1]], ["orange-triangle", "rrr", [1, 1]], ["red-triangle", "rr", [1, 2]], ["blue-triangle", "rrrr", [4, 3]]]
+[["red-vee", "frrrrr", [2, 2]], ["purple-vee", "r", [4, 2]], ["pink-vee", "frrr", [2, 3]], ["yellow-vee", "I", [3, 0]], ["blue-vee", "frrr", [0, 3]], ["purple-line", "r", [3, 2]], ["lime-line", "rrrrr", [4, 1]], ["green-line", "frrrrr", [5, 0]], ["green-triangle", "frrrr", [6, 1]], ["orange-triangle", "rrr", [1, 1]], ["red-triangle", "rr", [1, 2]], ["blue-triangle", "f", [5, 2]]]
+[["red-vee", "frrrrr", [5, 1]], ["purple-vee", "frrrrr", [1, 1]], ["pink-vee", "f", [6, 0]], ["yellow-vee", "frrr", [0, 3]], ["blue-vee", "rrrr", [4, 3]], ["purple-line", "I", [2, 3]], ["lime-line", "frrrr", [5, 2]], ["green-line", "frrrrr", [2, 0]], ["green-triangle", "frrr", [2, 3]], ["orange-triangle", "rrr", [3, 1]], ["red-triangle", "frrr", [3, 2]], ["blue-triangle", "I", [2, 1]]]
+[["red-vee", "frrrrr", [5, 1]], ["purple-vee", "frrrrr", [1, 1]], ["pink-vee", "f", [6, 0]], ["yellow-vee", "frrr", [0, 3]], ["blue-vee", "rrrr", [4, 3]], ["purple-line", "I", [2, 3]], ["lime-line", "frrrr", [5, 2]], ["green-line", "frrrrr", [2, 0]], ["green-triangle", "rrr", [2, 3]], ["orange-triangle", "frrrr", [2, 2]], ["red-triangle", "rr", [3, 1]], ["blue-triangle", "rr", [4, 1]]]
+[["red-vee", "frrrrr", [5, 1]], ["purple-vee", "frrrrr", [1, 1]], ["pink-vee", "f", [6, 0]], ["yellow-vee", "frrr", [0, 3]], ["blue-vee", "rrrr", [4, 3]], ["purple-line", "I", [2, 3]], ["lime-line", "frrrr", [5, 2]], ["green-line", "frrrrr", [2, 0]], ["green-triangle", "rrr", [2, 3]], ["orange-triangle", "rr", [3, 1]], ["red-triangle", "frrrr", [2, 2]], ["blue-triangle", "rr", [4, 1]]]
+[["red-vee", "frrrrr", [5, 1]], ["purple-vee", "frr", [3, 2]], ["pink-vee", "f", [6, 0]], ["yellow-vee", "f", [4, 0]], ["blue-vee", "rrrr", [4, 3]], ["purple-line", "rrr", [2, 0]], ["lime-line", "frrrr", [5, 2]], ["green-line", "frr", [2, 3]], ["green-triangle", "f", [2, 0]], ["orange-triangle", "I", [1, 2]], ["red-triangle", "f", [1, 1]], ["blue-triangle", "rrr", [2, 2]]]
+[["red-vee", "frrrrr", [5, 1]], ["purple-vee", "frr", [3, 2]], ["pink-vee", "f", [6, 0]], ["yellow-vee", "f", [4, 0]], ["blue-vee", "rrrr", [4, 3]], ["purple-line", "rrr", [2, 0]], ["lime-line", "frrrr", [5, 2]], ["green-line", "frr", [2, 3]], ["green-triangle", "I", [2, 0]], ["orange-triangle", "fr", [2, 1]], ["red-triangle", "rrrrr", [1, 2]], ["blue-triangle", "rrrrr", [0, 2]]]
+[["red-vee", "frrrrr", [5, 1]], ["purple-vee", "frr", [3, 2]], ["pink-vee", "f", [6, 0]], ["yellow-vee", "f", [4, 0]], ["blue-vee", "rrrr", [4, 3]], ["purple-line", "rrr", [2, 0]], ["lime-line", "frrrr", [5, 2]], ["green-line", "frr", [2, 3]], ["green-triangle", "I", [2, 0]], ["orange-triangle", "rrrrr", [1, 2]], ["red-triangle", "fr", [2, 1]], ["blue-triangle", "rrrrr", [0, 2]]]
+[["red-vee", "frrrrr", [1, 1]], ["purple-vee", "frr", [5, 2]], ["pink-vee", "f", [2, 0]], ["yellow-vee", "f", [6, 0]], ["blue-vee", "rrrr", [0, 3]], ["purple-line", "rrr", [4, 0]], ["lime-line", "frrrr", [1, 2]], ["green-line", "frr", [4, 3]], ["green-triangle", "I", [4, 0]], ["orange-triangle", "fr", [4, 1]], ["red-triangle", "rrrrr", [3, 2]], ["blue-triangle", "rrrrr", [2, 2]]]
+[["red-vee", "frrrrr", [1, 1]], ["purple-vee", "frr", [5, 2]], ["pink-vee", "f", [2, 0]], ["yellow-vee", "f", [6, 0]], ["blue-vee", "rrrr", [0, 3]], ["purple-line", "rrr", [4, 0]], ["lime-line", "frrrr", [1, 2]], ["green-line", "frr", [4, 3]], ["green-triangle", "I", [4, 0]], ["orange-triangle", "rrrrr", [3, 2]], ["red-triangle", "fr", [4, 1]], ["blue-triangle", "rrrrr", [2, 2]]]
+[["red-vee", "frrrrr", [1, 1]], ["purple-vee", "fr", [5, 1]], ["pink-vee", "r", [6, 0]], ["yellow-vee", "frrr", [0, 3]], ["blue-vee", "rrrrr", [4, 1]], ["purple-line", "I", [3, 3]], ["lime-line", "rrrrr", [2, 0]], ["green-line", "fr", [3, 2]], ["green-triangle", "r", [4, 0]], ["orange-triangle", "rr", [2, 3]], ["red-triangle", "frr", [4, 3]], ["blue-triangle", "rrr", [1, 2]]]
+[["red-vee", "frrrrr", [1, 1]], ["purple-vee", "fr", [4, 0]], ["pink-vee", "f", [2, 0]], ["yellow-vee", "f", [6, 0]], ["blue-vee", "rrrr", [0, 3]], ["purple-line", "rrrrr", [5, 2]], ["lime-line", "frrrr", [1, 2]], ["green-line", "rr", [3, 3]], ["green-triangle", "frrrr", [5, 2]], ["orange-triangle", "frr", [3, 2]], ["red-triangle", "f", [3, 0]], ["blue-triangle", "rrrrr", [2, 2]]]
+[["red-vee", "frrrrr", [1, 1]], ["purple-vee", "fr", [3, 0]], ["pink-vee", "f", [2, 0]], ["yellow-vee", "frrr", [0, 3]], ["blue-vee", "frrr", [1, 2]], ["purple-line", "I", [2, 3]], ["lime-line", "r", [3, 1]], ["green-line", "f", [3, 2]], ["green-triangle", "frrrrr", [6, 1]], ["orange-triangle", "frr", [3, 3]], ["red-triangle", "frr", [4, 3]], ["blue-triangle", "rrrrr", [5, 0]]]
+[["red-vee", "frrrrr", [1, 1]], ["purple-vee", "fr", [3, 0]], ["pink-vee", "f", [2, 0]], ["yellow-vee", "frrr", [0, 3]], ["blue-vee", "frrr", [1, 2]], ["purple-line", "I", [2, 3]], ["lime-line", "r", [3, 1]], ["green-line", "r", [3, 2]], ["green-triangle", "frrrrr", [6, 1]], ["orange-triangle", "frr", [3, 3]], ["red-triangle", "frr", [4, 3]], ["blue-triangle", "rrrrr", [5, 0]]]
+[["red-vee", "frrrrr", [1, 1]], ["purple-vee", "fr", [3, 0]], ["pink-vee", "f", [2, 0]], ["yellow-vee", "frrr", [0, 3]], ["blue-vee", "frrr", [1, 2]], ["purple-line", "rrrr", [4, 2]], ["lime-line", "r", [3, 1]], ["green-line", "rr", [2, 3]], ["green-triangle", "r", [4, 2]], ["orange-triangle", "frrrrr", [6, 1]], ["red-triangle", "f", [5, 2]], ["blue-triangle", "rrrrr", [5, 0]]]
+[["red-vee", "frrrrr", [1, 1]], ["purple-vee", "fr", [3, 0]], ["pink-vee", "f", [2, 0]], ["yellow-vee", "frrr", [0, 3]], ["blue-vee", "frrr", [1, 2]], ["purple-line", "rrrr", [4, 2]], ["lime-line", "r", [3, 1]], ["green-line", "rr", [2, 3]], ["green-triangle", "r", [4, 2]], ["orange-triangle", "frrrr", [6, 1]], ["red-triangle", "rr", [5, 1]], ["blue-triangle", "frrrr", [5, 3]]]
+[["red-vee", "frrrrr", [1, 1]], ["purple-vee", "fr", [3, 0]], ["pink-vee", "f", [2, 0]], ["yellow-vee", "frrr", [0, 3]], ["blue-vee", "frrr", [1, 2]], ["purple-line", "rrrr", [4, 2]], ["lime-line", "r", [3, 1]], ["green-line", "rr", [2, 3]], ["green-triangle", "r", [4, 2]], ["orange-triangle", "rr", [6, 1]], ["red-triangle", "rr", [5, 1]], ["blue-triangle", "frrrr", [5, 3]]]
+[["red-vee", "frrrrr", [1, 1]], ["purple-vee", "fr", [3, 0]], ["pink-vee", "f", [2, 0]], ["yellow-vee", "frrr", [0, 3]], ["blue-vee", "frrr", [1, 2]], ["purple-line", "rrrr", [4, 2]], ["lime-line", "r", [3, 1]], ["green-line", "rr", [2, 3]], ["green-triangle", "r", [4, 2]], ["orange-triangle", "r", [6, 1]], ["red-triangle", "f", [5, 2]], ["blue-triangle", "rrrrr", [5, 0]]]
+[["red-vee", "frrrrr", [1, 1]], ["purple-vee", "fr", [3, 0]], ["pink-vee", "f", [2, 0]], ["yellow-vee", "frrr", [0, 3]], ["blue-vee", "frrr", [1, 2]], ["purple-line", "rr", [4, 1]], ["lime-line", "r", [3, 1]], ["green-line", "rr", [2, 3]], ["green-triangle", "fr", [4, 1]], ["orange-triangle", "I", [4, 2]], ["red-triangle", "frrrr", [6, 1]], ["blue-triangle", "frrrr", [5, 3]]]
+[["red-vee", "frrrrr", [1, 1]], ["purple-vee", "fr", [3, 0]], ["pink-vee", "f", [2, 0]], ["yellow-vee", "frrr", [0, 3]], ["blue-vee", "frrr", [1, 2]], ["purple-line", "rr", [4, 1]], ["lime-line", "r", [3, 1]], ["green-line", "rr", [2, 3]], ["green-triangle", "fr", [4, 1]], ["orange-triangle", "I", [4, 2]], ["red-triangle", "f", [5, 2]], ["blue-triangle", "rr", [6, 1]]]
+[["red-vee", "frrrrr", [1, 1]], ["purple-vee", "fr", [3, 0]], ["pink-vee", "f", [2, 0]], ["yellow-vee", "frrr", [0, 3]], ["blue-vee", "frrr", [1, 2]], ["purple-line", "rr", [4, 1]], ["lime-line", "r", [3, 1]], ["green-line", "rr", [2, 3]], ["green-triangle", "fr", [4, 1]], ["orange-triangle", "frrrr", [6, 1]], ["red-triangle", "I", [4, 2]], ["blue-triangle", "f", [5, 2]]]
+[["red-vee", "frrrrr", [1, 1]], ["purple-vee", "fr", [3, 0]], ["pink-vee", "f", [2, 0]], ["yellow-vee", "frrr", [0, 3]], ["blue-vee", "frrr", [1, 2]], ["purple-line", "rr", [4, 1]], ["lime-line", "r", [3, 1]], ["green-line", "rr", [2, 3]], ["green-triangle", "fr", [4, 1]], ["orange-triangle", "rr", [6, 1]], ["red-triangle", "I", [4, 2]], ["blue-triangle", "f", [5, 2]]]
+[["red-vee", "frrrrr", [1, 1]], ["purple-vee", "rrrrr", [2, 1]], ["pink-vee", "frrr", [1, 2]], ["yellow-vee", "frrr", [0, 3]], ["blue-vee", "frrrrr", [6, 1]], ["purple-line", "rrr", [5, 0]], ["lime-line", "rrrrr", [2, 0]], ["green-line", "rr", [2, 3]], ["green-triangle", "I", [5, 0]], ["orange-triangle", "f", [4, 2]], ["red-triangle", "f", [5, 2]], ["blue-triangle", "frrr", [3, 2]]]
+[["red-vee", "frrrrr", [1, 1]], ["purple-vee", "rrrrr", [2, 1]], ["pink-vee", "frrr", [1, 2]], ["yellow-vee", "frrr", [0, 3]], ["blue-vee", "frrrrr", [6, 1]], ["purple-line", "rrr", [5, 0]], ["lime-line", "rrrrr", [2, 0]], ["green-line", "rr", [2, 3]], ["green-triangle", "I", [5, 0]], ["orange-triangle", "I", [4, 2]], ["red-triangle", "f", [5, 2]], ["blue-triangle", "frrr", [3, 2]]]
+[["red-vee", "frrrrr", [1, 1]], ["purple-vee", "rrrrr", [2, 1]], ["pink-vee", "frrr", [1, 2]], ["yellow-vee", "frrr", [0, 3]], ["blue-vee", "frrrrr", [6, 1]], ["purple-line", "r", [5, 2]], ["lime-line", "rrrrr", [2, 0]], ["green-line", "rr", [2, 3]], ["green-triangle", "rrrrr", [5, 0]], ["orange-triangle", "I", [4, 1]], ["red-triangle", "I", [4, 2]], ["blue-triangle", "I", [4, 0]]]
+[["red-vee", "frrrrr", [1, 1]], ["purple-vee", "rrrrr", [2, 1]], ["pink-vee", "frrr", [1, 2]], ["yellow-vee", "frrr", [0, 3]], ["blue-vee", "frr", [3, 1]], ["purple-line", "I", [4, 2]], ["lime-line", "rrrrr", [2, 0]], ["green-line", "frrrrr", [2, 3]], ["green-triangle", "rrr", [4, 2]], ["orange-triangle", "f", [6, 0]], ["red-triangle", "rrr", [4, 1]], ["blue-triangle", "rr", [5, 3]]]
+[["red-vee", "frrrrr", [1, 1]], ["purple-vee", "rrrrr", [2, 1]], ["pink-vee", "frrr", [1, 2]], ["yellow-vee", "frrr", [0, 3]], ["blue-vee", "frr", [3, 1]], ["purple-line", "I", [4, 2]], ["lime-line", "rrrrr", [2, 0]], ["green-line", "frrrrr", [2, 3]], ["green-triangle", "rrr", [4, 2]], ["orange-triangle", "I", [6, 0]], ["red-triangle", "rrr", [4, 1]], ["blue-triangle", "rr", [5, 3]]]
+[["red-vee", "frrrrr", [1, 1]], ["purple-vee", "rrrrr", [2, 1]], ["pink-vee", "frrr", [1, 2]], ["yellow-vee", "frrr", [0, 3]], ["blue-vee", "frr", [3, 1]], ["purple-line", "I", [4, 2]], ["lime-line", "rrrrr", [2, 0]], ["green-line", "rr", [2, 3]], ["green-triangle", "rrr", [4, 2]], ["orange-triangle", "f", [6, 0]], ["red-triangle", "rrr", [4, 1]], ["blue-triangle", "rr", [5, 3]]]
+[["red-vee", "frrrrr", [1, 1]], ["purple-vee", "rrrrr", [2, 1]], ["pink-vee", "frrr", [1, 2]], ["yellow-vee", "frrr", [0, 3]], ["blue-vee", "frr", [3, 1]], ["purple-line", "I", [4, 2]], ["lime-line", "rrrrr", [2, 0]], ["green-line", "rr", [2, 3]], ["green-triangle", "rrr", [4, 2]], ["orange-triangle", "I", [6, 0]], ["red-triangle", "rrr", [4, 1]], ["blue-triangle", "rr", [5, 3]]]
+[["red-vee", "frrrrr", [1, 1]], ["purple-vee", "rrrrr", [2, 1]], ["pink-vee", "frrr", [1, 2]], ["yellow-vee", "frrr", [0, 3]], ["blue-vee", "I", [4, 0]], ["purple-line", "r", [5, 1]], ["lime-line", "rrrrr", [2, 0]], ["green-line", "rr", [2, 3]], ["green-triangle", "frr", [5, 1]], ["orange-triangle", "I", [5, 2]], ["red-triangle", "I", [4, 2]], ["blue-triangle", "frrr", [3, 2]]]
+[["red-vee", "frrrrr", [1, 1]], ["purple-vee", "rrrrr", [2, 1]], ["pink-vee", "frrr", [1, 2]], ["yellow-vee", "frrr", [0, 3]], ["blue-vee", "I", [4, 0]], ["purple-line", "r", [5, 1]], ["lime-line", "rrrrr", [2, 0]], ["green-line", "rr", [2, 3]], ["green-triangle", "frr", [5, 1]], ["orange-triangle", "I", [5, 2]], ["red-triangle", "I", [4, 2]], ["blue-triangle", "I", [4, 1]]]
+[["red-vee", "frrrrr", [1, 1]], ["purple-vee", "rrrrr", [2, 1]], ["pink-vee", "frrr", [1, 2]], ["yellow-vee", "frrr", [0, 3]], ["blue-vee", "I", [4, 0]], ["purple-line", "r", [5, 1]], ["lime-line", "rrrrr", [2, 0]], ["green-line", "rr", [2, 3]], ["green-triangle", "f", [6, 0]], ["orange-triangle", "I", [5, 2]], ["red-triangle", "I", [4, 2]], ["blue-triangle", "frrr", [3, 2]]]
+[["red-vee", "frrrrr", [1, 1]], ["purple-vee", "rrrrr", [2, 1]], ["pink-vee", "frrr", [1, 2]], ["yellow-vee", "frrr", [0, 3]], ["blue-vee", "I", [4, 0]], ["purple-line", "r", [5, 1]], ["lime-line", "rrrrr", [2, 0]], ["green-line", "rr", [2, 3]], ["green-triangle", "f", [6, 0]], ["orange-triangle", "I", [5, 2]], ["red-triangle", "I", [4, 2]], ["blue-triangle", "I", [4, 1]]]
+[["red-vee", "frrrrr", [1, 1]], ["purple-vee", "rrrrr", [2, 1]], ["pink-vee", "frrr", [1, 2]], ["yellow-vee", "frrr", [0, 3]], ["blue-vee", "I", [4, 0]], ["purple-line", "r", [5, 1]], ["lime-line", "rrrrr", [2, 0]], ["green-line", "rr", [2, 3]], ["green-triangle", "rrrr", [5, 1]], ["orange-triangle", "I", [5, 2]], ["red-triangle", "I", [4, 2]], ["blue-triangle", "frrr", [3, 2]]]
+[["red-vee", "frrrrr", [1, 1]], ["purple-vee", "rrrrr", [2, 1]], ["pink-vee", "frrr", [1, 2]], ["yellow-vee", "frrr", [0, 3]], ["blue-vee", "I", [4, 0]], ["purple-line", "r", [5, 1]], ["lime-line", "rrrrr", [2, 0]], ["green-line", "rr", [2, 3]], ["green-triangle", "rrrr", [5, 1]], ["orange-triangle", "I", [5, 2]], ["red-triangle", "I", [4, 2]], ["blue-triangle", "I", [4, 1]]]
+[["red-vee", "frrrrr", [1, 1]], ["purple-vee", "rrrrr", [2, 1]], ["pink-vee", "frrr", [1, 2]], ["yellow-vee", "frrr", [0, 3]], ["blue-vee", "I", [4, 0]], ["purple-line", "r", [5, 1]], ["lime-line", "rrrrr", [2, 0]], ["green-line", "rr", [2, 3]], ["green-triangle", "rr", [6, 1]], ["orange-triangle", "I", [5, 2]], ["red-triangle", "I", [4, 2]], ["blue-triangle", "frrr", [3, 2]]]
+[["red-vee", "frrr", [4, 3]], ["purple-vee", "frr", [5, 2]], ["pink-vee", "frrr", [0, 3]], ["yellow-vee", "f", [6, 0]], ["blue-vee", "I", [3, 2]], ["purple-line", "rrr", [4, 0]], ["lime-line", "frr", [3, 3]], ["green-line", "fr", [1, 2]], ["green-triangle", "I", [4, 0]], ["orange-triangle", "frrrrr", [3, 0]], ["red-triangle", "frrrrr", [2, 0]], ["blue-triangle", "frrr", [2, 2]]]
+[["red-vee", "frrr", [4, 3]], ["purple-vee", "frr", [5, 2]], ["pink-vee", "frrr", [0, 3]], ["yellow-vee", "I", [1, 1]], ["blue-vee", "I", [3, 2]], ["purple-line", "I", [3, 1]], ["lime-line", "frr", [3, 3]], ["green-line", "frrrrr", [2, 0]], ["green-triangle", "rrr", [3, 1]], ["orange-triangle", "frr", [4, 1]], ["red-triangle", "frr", [5, 1]], ["blue-triangle", "fr", [1, 2]]]
+[["red-vee", "frrr", [4, 3]], ["purple-vee", "frr", [5, 2]], ["pink-vee", "frrr", [0, 3]], ["yellow-vee", "I", [1, 1]], ["blue-vee", "I", [3, 2]], ["purple-line", "I", [3, 1]], ["lime-line", "frr", [3, 3]], ["green-line", "frr", [2, 0]], ["green-triangle", "r", [4, 0]], ["orange-triangle", "frr", [4, 1]], ["red-triangle", "frr", [5, 1]], ["blue-triangle", "fr", [1, 2]]]
+[["red-vee", "frrr", [4, 3]], ["purple-vee", "frr", [5, 2]], ["pink-vee", "frrr", [0, 3]], ["yellow-vee", "I", [1, 1]], ["blue-vee", "I", [3, 2]], ["purple-line", "I", [3, 1]], ["lime-line", "frr", [3, 3]], ["green-line", "rrrrr", [2, 0]], ["green-triangle", "r", [4, 0]], ["orange-triangle", "frr", [4, 1]], ["red-triangle", "frr", [5, 1]], ["blue-triangle", "fr", [1, 2]]]
+[["red-vee", "frrr", [4, 3]], ["purple-vee", "frr", [5, 2]], ["pink-vee", "fr", [4, 0]], ["yellow-vee", "f", [6, 0]], ["blue-vee", "rrrr", [3, 3]], ["purple-line", "rrr", [4, 1]], ["lime-line", "frrrr", [2, 2]], ["green-line", "frr", [1, 3]], ["green-triangle", "f", [4, 1]], ["orange-triangle", "fr", [0, 2]], ["red-triangle", "rrr", [2, 1]], ["blue-triangle", "frrr", [1, 1]]]
+[["red-vee", "frrr", [4, 3]], ["purple-vee", "frr", [5, 2]], ["pink-vee", "fr", [4, 0]], ["yellow-vee", "f", [6, 0]], ["blue-vee", "rrrr", [3, 3]], ["purple-line", "rrr", [4, 1]], ["lime-line", "frrrr", [2, 2]], ["green-line", "frr", [1, 3]], ["green-triangle", "f", [4, 1]], ["orange-triangle", "rrrrr", [0, 2]], ["red-triangle", "rrr", [2, 1]], ["blue-triangle", "frrr", [1, 1]]]
+[["red-vee", "frrr", [4, 3]], ["purple-vee", "frr", [5, 2]], ["pink-vee", "fr", [4, 0]], ["yellow-vee", "f", [6, 0]], ["blue-vee", "rrrr", [3, 3]], ["purple-line", "rrr", [4, 1]], ["lime-line", "frrrr", [2, 2]], ["green-line", "frr", [1, 3]], ["green-triangle", "f", [4, 1]], ["orange-triangle", "rrr", [2, 1]], ["red-triangle", "frrr", [1, 1]], ["blue-triangle", "fr", [0, 2]]]
+[["red-vee", "frrr", [4, 3]], ["purple-vee", "frr", [5, 2]], ["pink-vee", "fr", [4, 0]], ["yellow-vee", "f", [6, 0]], ["blue-vee", "rrrr", [3, 3]], ["purple-line", "rrr", [4, 1]], ["lime-line", "frrrr", [2, 2]], ["green-line", "frr", [1, 3]], ["green-triangle", "f", [4, 1]], ["orange-triangle", "rrr", [2, 1]], ["red-triangle", "frrr", [1, 1]], ["blue-triangle", "rrrr", [0, 2]]]
+[["red-vee", "frrr", [4, 3]], ["purple-vee", "frr", [5, 2]], ["pink-vee", "fr", [4, 0]], ["yellow-vee", "f", [6, 0]], ["blue-vee", "rrrr", [3, 3]], ["purple-line", "rrr", [4, 1]], ["lime-line", "frrrr", [2, 2]], ["green-line", "frr", [1, 3]], ["green-triangle", "f", [4, 1]], ["orange-triangle", "rrr", [2, 1]], ["red-triangle", "rrrrr", [0, 2]], ["blue-triangle", "fr", [1, 0]]]
+[["red-vee", "frrr", [4, 3]], ["purple-vee", "frr", [5, 2]], ["pink-vee", "fr", [4, 0]], ["yellow-vee", "f", [6, 0]], ["blue-vee", "rrrr", [3, 3]], ["purple-line", "rrr", [4, 1]], ["lime-line", "frrrr", [2, 2]], ["green-line", "frr", [1, 3]], ["green-triangle", "f", [4, 1]], ["orange-triangle", "frrr", [1, 1]], ["red-triangle", "rrr", [2, 1]], ["blue-triangle", "fr", [0, 2]]]
+[["red-vee", "frrr", [4, 3]], ["purple-vee", "frr", [5, 2]], ["pink-vee", "fr", [4, 0]], ["yellow-vee", "f", [6, 0]], ["blue-vee", "rrrr", [3, 3]], ["purple-line", "rrr", [4, 1]], ["lime-line", "frrrr", [2, 2]], ["green-line", "frr", [1, 3]], ["green-triangle", "f", [4, 1]], ["orange-triangle", "frrr", [1, 1]], ["red-triangle", "rrr", [2, 1]], ["blue-triangle", "rrrr", [0, 2]]]
+[["red-vee", "frrr", [4, 3]], ["purple-vee", "frr", [5, 2]], ["pink-vee", "fr", [4, 0]], ["yellow-vee", "f", [6, 0]], ["blue-vee", "rrrr", [3, 3]], ["purple-line", "rrr", [4, 1]], ["lime-line", "frrrr", [2, 2]], ["green-line", "frr", [1, 3]], ["green-triangle", "f", [4, 1]], ["orange-triangle", "rrr", [1, 1]], ["red-triangle", "rrr", [2, 1]], ["blue-triangle", "frrrr", [1, 2]]]
+[["red-vee", "frrr", [4, 3]], ["purple-vee", "frr", [5, 2]], ["pink-vee", "fr", [4, 0]], ["yellow-vee", "f", [6, 0]], ["blue-vee", "rrrr", [3, 3]], ["purple-line", "rrr", [4, 1]], ["lime-line", "frrrr", [2, 2]], ["green-line", "frr", [1, 3]], ["green-triangle", "f", [4, 1]], ["orange-triangle", "rrr", [1, 1]], ["red-triangle", "rrr", [2, 1]], ["blue-triangle", "fr", [0, 2]]]
+[["red-vee", "frrr", [4, 3]], ["purple-vee", "frr", [5, 2]], ["pink-vee", "fr", [4, 0]], ["yellow-vee", "f", [6, 0]], ["blue-vee", "rrrr", [3, 3]], ["purple-line", "rrr", [4, 1]], ["lime-line", "frrrr", [2, 2]], ["green-line", "rrrrr", [1, 3]], ["green-triangle", "f", [4, 1]], ["orange-triangle", "rrr", [2, 1]], ["red-triangle", "frrr", [1, 1]], ["blue-triangle", "rrrr", [0, 2]]]
+[["red-vee", "frrr", [4, 3]], ["purple-vee", "frr", [5, 2]], ["pink-vee", "rr", [3, 1]], ["yellow-vee", "f", [6, 0]], ["blue-vee", "rrrr", [3, 3]], ["purple-line", "rrrr", [2, 1]], ["lime-line", "rrrrr", [4, 0]], ["green-line", "frr", [1, 3]], ["green-triangle", "f", [4, 1]], ["orange-triangle", "rrrrr", [0, 2]], ["red-triangle", "fr", [1, 1]], ["blue-triangle", "fr", [1, 0]]]
+[["red-vee", "frrr", [4, 3]], ["purple-vee", "rrrr", [3, 3]], ["pink-vee", "rrr", [2, 3]], ["yellow-vee", "frr", [4, 1]], ["blue-vee", "r", [6, 0]], ["purple-line", "rrrrr", [3, 1]], ["lime-line", "frrrrr", [3, 0]], ["green-line", "frr", [2, 1]], ["green-triangle", "fr", [1, 0]], ["orange-triangle", "r", [2, 2]], ["red-triangle", "frrrrr", [1, 2]], ["blue-triangle", "frrr", [5, 2]]]
+[["red-vee", "frrr", [3, 3]], ["purple-vee", "rrrr", [2, 3]], ["pink-vee", "rrr", [1, 3]], ["yellow-vee", "r", [3, 1]], ["blue-vee", "r", [6, 0]], ["purple-line", "rrrrr", [1, 2]], ["lime-line", "fr", [1, 1]], ["green-line", "frrrrr", [2, 0]], ["green-triangle", "frrrr", [5, 3]], ["orange-triangle", "frrrrr", [5, 0]], ["red-triangle", "rrr", [5, 2]], ["blue-triangle", "frrr", [4, 2]]]
+[["red-vee", "frrr", [3, 3]], ["purple-vee", "rrrr", [2, 3]], ["pink-vee", "rrr", [1, 3]], ["yellow-vee", "r", [3, 1]], ["blue-vee", "r", [6, 0]], ["purple-line", "rrrrr", [1, 2]], ["lime-line", "fr", [1, 1]], ["green-line", "rr", [2, 0]], ["green-triangle", "frrrr", [5, 3]], ["orange-triangle", "frrrrr", [5, 0]], ["red-triangle", "rrr", [5, 2]], ["blue-triangle", "frrr", [4, 2]]]
+[["red-vee", "frrr", [3, 3]], ["purple-vee", "rrrr", [2, 3]], ["pink-vee", "frrrr", [2, 1]], ["yellow-vee", "frr", [3, 1]], ["blue-vee", "rrr", [1, 3]], ["purple-line", "r", [1, 1]], ["lime-line", "rrrrr", [2, 0]], ["green-line", "frrrrr", [5, 0]], ["green-triangle", "frrrr", [5, 3]], ["orange-triangle", "rrr", [5, 2]], ["red-triangle", "rrrrr", [0, 2]], ["blue-triangle", "fr", [4, 1]]]
+[["red-vee", "frrr", [3, 3]], ["purple-vee", "rrrr", [2, 3]], ["pink-vee", "frrrr", [2, 1]], ["yellow-vee", "frr", [3, 1]], ["blue-vee", "rrr", [1, 3]], ["purple-line", "r", [1, 1]], ["lime-line", "rrrrr", [2, 0]], ["green-line", "frrrrr", [5, 0]], ["green-triangle", "frrrr", [6, 1]], ["orange-triangle", "frr", [4, 3]], ["red-triangle", "rrrrr", [0, 2]], ["blue-triangle", "rrrrr", [4, 1]]]
+[["red-vee", "frrr", [3, 3]], ["purple-vee", "rrrr", [2, 3]], ["pink-vee", "frrrr", [2, 1]], ["yellow-vee", "frr", [3, 1]], ["blue-vee", "rrr", [1, 3]], ["purple-line", "r", [1, 1]], ["lime-line", "rrrrr", [2, 0]], ["green-line", "rr", [5, 0]], ["green-triangle", "frrrr", [5, 3]], ["orange-triangle", "rrr", [5, 2]], ["red-triangle", "rrrrr", [0, 2]], ["blue-triangle", "fr", [4, 1]]]
+[["red-vee", "frrr", [3, 3]], ["purple-vee", "rrrr", [2, 3]], ["pink-vee", "frr", [4, 1]], ["yellow-vee", "frr", [3, 1]], ["blue-vee", "rrr", [1, 3]], ["purple-line", "rrr", [5, 0]], ["lime-line", "r", [5, 1]], ["green-line", "frrr", [5, 2]], ["green-triangle", "fr", [1, 0]], ["orange-triangle", "fr", [0, 2]], ["red-triangle", "fr", [1, 1]], ["blue-triangle", "frrrrr", [3, 0]]]
+[["red-vee", "frrr", [3, 3]], ["purple-vee", "rrrr", [2, 3]], ["pink-vee", "frr", [4, 1]], ["yellow-vee", "frr", [3, 1]], ["blue-vee", "rrr", [1, 3]], ["purple-line", "rrr", [5, 0]], ["lime-line", "r", [5, 1]], ["green-line", "frrr", [5, 2]], ["green-triangle", "fr", [1, 0]], ["orange-triangle", "fr", [1, 1]], ["red-triangle", "rrrrr", [0, 2]], ["blue-triangle", "frrrrr", [3, 0]]]
+[["red-vee", "frrr", [3, 3]], ["purple-vee", "rrrr", [2, 3]], ["pink-vee", "frr", [4, 1]], ["yellow-vee", "frr", [3, 1]], ["blue-vee", "rrr", [1, 3]], ["purple-line", "rrr", [5, 0]], ["lime-line", "r", [5, 1]], ["green-line", "frrr", [5, 2]], ["green-triangle", "fr", [1, 0]], ["orange-triangle", "rrrrr", [0, 2]], ["red-triangle", "fr", [1, 1]], ["blue-triangle", "frrrrr", [3, 0]]]
+[["red-vee", "frrr", [1, 3]], ["purple-vee", "frr", [5, 2]], ["pink-vee", "rrrr", [0, 3]], ["yellow-vee", "frrrrr", [3, 2]], ["blue-vee", "r", [6, 0]], ["purple-line", "rrr", [1, 2]], ["lime-line", "frrrr", [2, 1]], ["green-line", "frr", [4, 3]], ["green-triangle", "fr", [3, 0]], ["orange-triangle", "frrrrr", [5, 0]], ["red-triangle", "frrrrr", [5, 1]], ["blue-triangle", "fr", [1, 0]]]
+`.trim();
+
+/* ---------- boot ---------- */
+function parseEmb(raw){
+  const out=[]; let bad=0,total=0;
+  for(const line of raw.split("\n")){
+    const s=line.trim(); if(!s) continue;
+    total++;
+    try{
+      const arr=JSON.parse(s);
+      if(!Array.isArray(arr)||arr.length!==12) throw 0;
+      const slots=new Uint8Array(24), byName={}, sigs={};
+      for(const [name,isoName,[q,r]] of arr){
+        const iso=ISO_IDX[isoName];
+        if(!(name in PIECES)||iso===undefined) throw 0;
+        const bc=bitCells(name,iso,q,r);
+        if(!canFit(slots,bc)) throw 0;
+        for(const [ci,m] of bc) slots[ci]|=m;
+        byName[name]=[iso,q,r]; sigs[name]=placeSig(bc);
+      }
+      if(Object.keys(byName).length!==12) throw 0;
+      out.push({byName,sigs});
+      allSigSet.add(solFullSig(sigs));
+    }catch(e){ bad++; console.warn("[DATA] skipped invalid solution line"); }
+  }
+  return {out,bad,total};
+}
+(function boot(){
+  const parsed=parseEmb(RAW);
+  EMB=parsed.out;
+  loadExtra();
+  console.log(`[BOOT] embedded=${EMB.length} extra=${EXTRA.length} distinct=${allSigSet.size}`);
+  applyLang();
+  loadChallenge(LORDER.includes(st.level)?st.level:"starter", st.nums[st.level]||1);
+  selftest({ok:EMB.length,bad:parsed.bad,total:parsed.total});
+  setTimeout(startEnum,1600);
+})();
+</script>
+</body>
+</html>
