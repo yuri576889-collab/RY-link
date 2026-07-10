@@ -2,7 +2,7 @@
 <html lang="bg">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0b0f1e">
@@ -326,20 +326,20 @@ function drawPiece(name,isoIdx){
     const a2=a===C?C:perm[a], b2=b===C?C:perm[b];
     let [x1,y1]=offPx(a2), [x2,y2]=offPx(b2);
     const dx=x2-x1, dy=y2-y1, len=Math.hypot(dx,dy), ux=dx/len, uy=dy/len;
-    const trimA=(maskAt[a2]&CBIT)?0:27, trimB=(maskAt[b2]&CBIT)?0:27;
+    const trimA=(maskAt[a2]&CBIT)?0:20, trimB=(maskAt[b2]&CBIT)?0:20;
     const ax=x1+ux*trimA, ay=y1+uy*trimA, bx=x2-ux*trimB, by=y2-uy*trimB;
-    el("line",{x1:ax,y1:ay,x2:bx,y2:by,stroke:"#000","stroke-width":15,"stroke-linecap":"round","stroke-opacity":.30},g);
-    el("line",{x1:ax,y1:ay,x2:bx,y2:by,stroke:col,"stroke-width":10.5,"stroke-linecap":"round"},g);
-    el("line",{x1:ax,y1:ay,x2:bx,y2:by,stroke:shade(col,.45),"stroke-width":3,"stroke-linecap":"round","stroke-opacity":.5},g);
+    el("line",{x1:ax,y1:ay,x2:bx,y2:by,stroke:"#000","stroke-width":17,"stroke-linecap":"round","stroke-opacity":.30},g);
+    el("line",{x1:ax,y1:ay,x2:bx,y2:by,stroke:col,"stroke-width":14,"stroke-linecap":"round"},g);
+    el("line",{x1:ax,y1:ay,x2:bx,y2:by,stroke:shade(col,.45),"stroke-width":4,"stroke-linecap":"round","stroke-opacity":.5},g);
   }
   // units
   for(const [off,m] of bits){
     const [x,y]=offPx(off);
     const u=el("g",{transform:`translate(${x},${y})`},g);
-    el("circle",{cx:0,cy:0,r:29,fill:"transparent"},u); // generous touch target
+    el("circle",{cx:0,cy:0,r:38,fill:"transparent"},u); // generous touch target (mobile-friendly)
     if(m&CBIT){ // ball
-      el("circle",{cx:0,cy:0,r:17.5,fill:`url(#g-${name})`,stroke:"rgba(0,0,0,.45)","stroke-width":1.2},u);
-      el("ellipse",{cx:-5,cy:-7,rx:6.5,ry:4,fill:"#fff",opacity:.45},u);
+      el("circle",{cx:0,cy:0,r:19,fill:`url(#g-${name})`,stroke:"rgba(0,0,0,.45)","stroke-width":1.2},u);
+      el("ellipse",{cx:-5.5,cy:-7.5,rx:7,ry:4.3,fill:"#fff",opacity:.45},u);
     }else{
       let gap=0,ang=0;
       const missing=[]; for(let d=0;d<6;d++) if(!(m&bit(d))) missing.push(d);
@@ -350,12 +350,12 @@ function drawPiece(name,isoIdx){
         for(const d of missing){ vx+=Math.cos(ANGD[d]*Math.PI/180); vy+=Math.sin(ANGD[d]*Math.PI/180); }
         ang=Math.atan2(vy,vx)*180/Math.PI;
       }
-      ringCircle(u,24,3,"#000",.30,gap,ang).setAttribute("stroke-width",16.5);
-      ringCircle(u,24,13.5,col,1,gap,ang);
-      ringCircle(u,24,3.5,shade(col,.45),.5,gap,ang).setAttribute("transform",
+      ringCircle(u,25.5,3,"#000",.30,gap,ang).setAttribute("stroke-width",17.5);
+      ringCircle(u,25.5,14,col,1,gap,ang);
+      ringCircle(u,25.5,4,shade(col,.45),.5,gap,ang).setAttribute("transform",
         (gap>0?`rotate(${ang+gap/2}) `:"")+"translate(0,0)");
       // subtle top highlight ring
-      const hl=ringCircle(u,27.5,2,"#fff",.16,gap,ang);
+      const hl=ringCircle(u,29,2,"#fff",.16,gap,ang);
       if(gap>0) hl.setAttribute("transform",`rotate(${ang+gap/2})`);
     }
   }
@@ -519,14 +519,38 @@ function moveFloat(pt){
   for(const [ci] of bc) SOCKELS[ci].setAttribute("class","sock "+(ok?"hlok":"hlbad"));
   drag.target={q,r,valid:ok};
 }
+function pieceUnitScreenPositions(name){
+  const positions=[];
+  if(st.board[name]){
+    const p=st.board[name]; const [ax,ay]=cellPx(p.q,p.r);
+    for(const [off] of TP[name][p.iso]){ const [lx,ly]=offPx(off); positions.push([ax+lx,ay+ly]); }
+  }else{
+    const i=NAMES.indexOf(name), iso=st.trayIso[name]??ISO_IDX.I;
+    const [cx,cy]=pieceBBoxCenter(name,iso), sc=.40;
+    for(const [off] of TP[name][iso]){ const [lx,ly]=offPx(off); positions.push([TRAY_CX(i)+sc*(lx-cx),TRAY_CY(i)+sc*(ly-cy)]); }
+  }
+  return positions;
+}
+function findNearestPiece(pt,maxDist){
+  let bestName=null,bestD=maxDist;
+  for(const name of NAMES){
+    for(const [ux,uy] of pieceUnitScreenPositions(name)){
+      const d=Math.hypot(pt.x-ux,pt.y-uy);
+      if(d<bestD){ bestD=d; bestName=name; }
+    }
+  }
+  return bestName;
+}
 svg.addEventListener("pointerdown",e=>{
   if(drag) return; // ignore a second finger while dragging
   if(!$("modal").classList.contains("hidden")) return;
   e.preventDefault();
+  const pt=svgPt(e);
   const tEl=e.target.closest ? e.target.closest("[data-piece]") : null;
-  if(!tEl){ st.selected=null; renderAll(); return; }
-  const name=tEl.getAttribute("data-piece");
-  const pt=svgPt(e); lastPt=pt;
+  // fall back to nearest piece within reach — forgives imprecise mobile taps
+  const name=tEl?tEl.getAttribute("data-piece"):findNearestPiece(pt,44);
+  if(!name){ st.selected=null; renderAll(); return; }
+  lastPt=pt;
   if(st.board[name]){
     if(st.board[name].locked){ toast(T().locked); return; }
     const p=st.board[name];
@@ -550,7 +574,7 @@ svg.addEventListener("pointermove",e=>{
   if(!drag) return;
   e.preventDefault();
   const pt=svgPt(e); lastPt=pt;
-  if(!drag.moved && Math.hypot(pt.x-drag.startX,pt.y-drag.startY)>8) drag.moved=true;
+  if(!drag.moved && Math.hypot(pt.x-drag.startX,pt.y-drag.startY)>16) drag.moved=true;
   if(drag.moved) moveFloat(pt);
 });
 function endDrag(e){
