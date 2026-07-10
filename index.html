@@ -144,6 +144,8 @@ const I18N = {
     locked:"Тази фигура е фиксирана от предизвикателството",
     hintPlaced:"Поставих една фигура от решението.",
     softHintMsg:"Тази фигура трябва да играеш следващо — сам избери мястото и завъртането.",
+    searching:"Търся решение…",
+    deadEnd:"Тази подредба няма решение оттук — премести някоя от вече поставените фигури.",
     noHint:"С това подреждане не откривам познато решение — премигващите фигури вероятно трябва да се преместят.",
     noHint2:"Няма поставени фигури за проверка — просто опитай!",
     cantRotate:"Тук няма място за завъртане — пречат други фигури",
@@ -170,6 +172,8 @@ const I18N = {
     locked:"This piece is fixed by the challenge",
     hintPlaced:"Placed one piece from a solution.",
     softHintMsg:"This piece should be played next — place and rotate it yourself.",
+    searching:"Searching for a solution…",
+    deadEnd:"This arrangement has no solution from here — move one of the pieces you've already placed.",
     noHint:"No known solution matches this layout — the blinking pieces probably need to move.",
     noHint2:"Nothing placed to check yet — just try!",
     cantRotate:"No room to rotate here — other pieces are in the way",
@@ -945,32 +949,72 @@ function flashSuspects(playerN,pool){
   sndInvalid();
   toast(playerN.length?T().noHint:T().noHint2);
 }
-function hint(){
-  if(!st.ch||placedCount()===12) return;
-  const {playerN,pool,full}=findMatchSet();
-  if(full.length){
-    const seed=EMB[st.ch.solIdx];
-    const T0=full.includes(seed)?seed:full[0];
-    const next=NAMES.find(n=>!st.board[n]);
-    const [iso,q,r]=T0.byName[next];
-    addPiece(next,iso,q,r,false);
-    pushUndo({name:next,from:null,to:{iso,q,r}});
-    st.hintsUsed++; st.selected=next;
-    sndHint();
-    toast(T().hintPlaced); renderAll(); checkWin();
-  }else{
-    st.hintsUsed++;
-    renderAll();
-    flashSuspects(playerN,pool);
+/* Live backtracking solve from the CURRENT board (not just the known-solutions
+   list). Reuses the same candidate generator/heuristic as the background
+   enumerator (chooseCand/ALLPLACE), just seeded from the pieces already on
+   the board instead of an empty one. Runs synchronously but time-boxed, so a
+   hint always gives a mathematically correct answer instead of "never seen
+   this before" when the exact final layout simply hasn't been discovered yet. */
+function buildSolution(moves){
+  const byName={},sigs={};
+  for(const [pi,iso,q,r] of moves){
+    const n=NAMES[pi];
+    byName[n]=[iso,q,r];
+    sigs[n]=placeSig(bitCells(n,iso,q,r));
   }
+  return {byName,sigs};
 }
-function softHint(){
-  if(!st.ch||placedCount()===12) return;
-  const {playerN,pool,full}=findMatchSet();
-  if(full.length){
-    const seed=EMB[st.ch.solIdx];
-    const T0=full.includes(seed)?seed:full[0];
-    const next=NAMES.find(n=>!st.board[n]);
+function recordSolutionObj(sol,forceSave){
+  const full=solFullSig(sol.sigs);
+  if(!allSigSet.has(full)){
+    allSigSet.add(full);
+    EXTRA.push(sol);
+    if(forceSave||EXTRA.length%10===0) saveExtra();
+    return true;
+  }
+  return false;
+}
+function liveSolve(budgetMs,override){
+  let used,slots0,placedMoves;
+  if(override){ used=override.used; slots0=override.slots; placedMoves=override.placedMoves; }
+  else{
+    used=0; slots0=st.slots.slice(); placedMoves=[];
+    for(const n in st.board){
+      const pi=NAMES.indexOf(n), p=st.board[n];
+      used|=(1<<pi); placedMoves.push([pi,p.iso,p.q,p.r]);
+    }
+  }
+  if(used===4095) return {impossible:true};
+  const first=chooseCand(slots0,used);
+  if(!first) return {impossible:true};
+  const stack=[{used,slots:slots0,pi:first.pi,cand:first.list,ci:0,moves:[]}];
+  const t0=performance.now();
+  while(stack.length){
+    if(performance.now()-t0>budgetMs) return {timeout:true};
+    const f=stack[stack.length-1];
+    if(f.ci>=f.cand.length){ stack.pop(); continue; }
+    const c=f.cand[f.ci++];
+    const slots2=f.slots.slice();
+    for(const [ci2,m] of c.bc) slots2[ci2]|=m;
+    const used2=f.used|(1<<f.pi);
+    const moves2=f.moves.concat([[f.pi,c.iso,c.q,c.r]]);
+    if(used2===4095){
+      const sol=buildSolution(placedMoves.concat(moves2));
+      recordSolutionObj(sol,true);
+      return {found:true,sol};
+    }
+    const nxt=chooseCand(slots2,used2);
+    if(!nxt) continue;
+    stack.push({used:used2,slots:slots2,pi:nxt.pi,cand:nxt.list,ci:0,moves:moves2});
+  }
+  return {impossible:true};
+}
+function applyHintSolution(sol,isSoft){
+  const next=NAMES.find(n=>!st.board[n]);
+  if(!next) return;
+  const [iso,q,r]=sol.byName[next];
+  if(!canFit(st.slots,bitCells(next,iso,q,r))){ toast(T().noHint2); return; }
+  if(isSoft){
     st.selected=next;
     st.hintsUsed++;
     sndHint();
@@ -979,11 +1023,53 @@ function softHint(){
     if(g&&g.animate) g.animate([{opacity:1},{opacity:.35},{opacity:1}],{duration:450,iterations:2});
     toast(T().softHintMsg);
   }else{
-    st.hintsUsed++;
-    renderAll();
-    flashSuspects(playerN,pool);
+    addPiece(next,iso,q,r,false);
+    pushUndo({name:next,from:null,to:{iso,q,r}});
+    st.hintsUsed++; st.selected=next;
+    sndHint();
+    toast(T().hintPlaced); renderAll(); checkWin();
   }
 }
+let hintBusy=false;
+function runHint(isSoft){
+  if(!st.ch||placedCount()===12||hintBusy) return;
+  const {playerN,pool,full}=findMatchSet();
+  if(full.length){
+    const seed=EMB[st.ch.solIdx];
+    const T0=full.includes(seed)?seed:full[0];
+    applyHintSolution(T0,isSoft);
+    return;
+  }
+  const ctxKey=st.level+"."+st.ch.num;
+  hintBusy=true;
+  $("btnHint").disabled=true; $("btnSoftHint").disabled=true;
+  toast(T().searching);
+  setTimeout(()=>{
+    const stillSame=st.ch&&(st.level+"."+st.ch.num)===ctxKey;
+    const res=stillSame?liveSolve(1200):{timeout:true};
+    hintBusy=false;
+    $("btnHint").disabled=false; $("btnSoftHint").disabled=false;
+    if(!stillSame) return;
+    if(res.found){
+      applyHintSolution(res.sol,isSoft);
+    }else if(res.impossible){
+      st.hintsUsed++;
+      renderAll();
+      for(const n of playerN){
+        const g=PIECE_EL[n];
+        if(g&&g.animate) g.animate([{opacity:1},{opacity:.15},{opacity:1}],{duration:400,iterations:3});
+      }
+      sndInvalid();
+      toast(T().deadEnd);
+    }else{
+      st.hintsUsed++;
+      renderAll();
+      flashSuspects(playerN,pool);
+    }
+  },30);
+}
+function hint(){ runHint(false); }
+function softHint(){ runHint(true); }
 function showSolution(){
   if(!st.ch) return;
   st.revealed=true;
@@ -1138,20 +1224,7 @@ function chooseCand(slots,used){
   return {pi:bestPi,list:bestList};
 }
 function solFullSig(sigs){ return NAMES.map(n=>sigs[n]).join(";"); }
-function recordSolution(moves){
-  const byName={},sigs={};
-  for(const [pi,iso,q,r] of moves){
-    const n=NAMES[pi];
-    byName[n]=[iso,q,r];
-    sigs[n]=placeSig(bitCells(n,iso,q,r));
-  }
-  const full=solFullSig(sigs);
-  if(!allSigSet.has(full)){
-    allSigSet.add(full);
-    EXTRA.push({byName,sigs});
-    if(EXTRA.length%10===0) saveExtra();
-  }
-}
+function recordSolution(moves){ recordSolutionObj(buildSolution(moves)); }
 function saveExtra(){ LS.set("enum.sols",EXTRA.map(s=>NAMES.map(n=>s.byName[n]))); }
 function loadExtra(){
   const arr=LS.get("enum.sols",[]);
@@ -1235,6 +1308,32 @@ function selftest(parsedInfo){
     if(c.locked.length&&countExt(c.locked,sol)===1) uniq++;
   }
   chk("challenge generation (all levels)", genOK, `unique among known: ${uniq}/5 levels`);
+  let liveOK=true,liveMsg="";
+  try{
+    const src=EMB[0];
+    const missing=NAMES.slice(0,2); // pretend these 2 pieces are still unplaced
+    const slots0=new Uint8Array(24), placedMoves=[]; let used=0;
+    NAMES.forEach((n,pi)=>{
+      if(missing.includes(n)) return;
+      const [iso,q,r]=src.byName[n];
+      const bc=bitCells(n,iso,q,r);
+      for(const [ci,m] of bc) slots0[ci]|=m;
+      used|=(1<<pi); placedMoves.push([pi,iso,q,r]);
+    });
+    const r=liveSolve(1500,{used,slots:slots0,placedMoves});
+    if(!r.found){ liveOK=false; liveMsg="no completion found for a known-solvable layout"; }
+    else{
+      const chkSlots=new Uint8Array(24); let collide=false;
+      for(const n of NAMES){
+        const [iso,q,r2]=r.sol.byName[n];
+        const bc=bitCells(n,iso,q,r2);
+        if(!canFit(chkSlots,bc)){ collide=true; break; }
+        for(const [ci,m] of bc) chkSlots[ci]|=m;
+      }
+      if(collide){ liveOK=false; liveMsg="returned solution has a collision"; }
+    }
+  }catch(e){ liveOK=false; liveMsg=String(e); }
+  chk("live solver completes a partial layout", liveOK, liveMsg);
   const allOK=res.every(r=>r[1]);
   console.log(allOK?"[SELFTEST] ALL OK":"[SELFTEST] FAILURES PRESENT");
   return allOK;
