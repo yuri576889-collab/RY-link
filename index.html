@@ -22,6 +22,9 @@
   .row{display:flex; align-items:center; gap:7px; flex-wrap:wrap;}
   .logo{font-weight:800; letter-spacing:2.5px; font-size:17px; color:var(--accent); white-space:nowrap;}
   .logo small{color:var(--dim); font-weight:600; letter-spacing:0.5px;}
+  .timer{font-variant-numeric:tabular-nums; font-weight:700; font-size:14px; color:var(--accent);
+    background:var(--panel2); border:1px solid var(--line); border-radius:999px; padding:5px 12px; white-space:nowrap;}
+  .timer.frozen{color:var(--ok);}
   .spacer{flex:1;}
   button,select{background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:10px;
     padding:7px 11px; font-size:14px; font-family:inherit; cursor:pointer; line-height:1.2;}
@@ -73,6 +76,7 @@
     <div class="row">
       <span class="logo">⬡ HEX LINK <small id="subT"></small></span>
       <span class="spacer"></span>
+      <span class="timer" id="timer">⏱ 00:00</span>
       <button id="btnLang" class="ghost">EN</button>
       <button id="btnHelp" class="ghost">?</button>
     </div>
@@ -110,7 +114,7 @@ const I18N = {
   bg:{sub:"пъзел", new:"🎲 Нова", hint:"💡 Жокер", help:"Как се играе",
     challenge:"Предизвикателство", of:"ниво",
     remaining:n=>n===1?"Остава 1 фигура":`Остават ${n} фигури`,
-    win:"Браво!", winText:(l,n)=>`Реши предизвикателство №${n} (${l}).`,
+    win:"Браво!", winText:(l,n,tm)=>`Реши предизвикателство №${n} (${l}) за ${tm}.`,
     winHints:h=>h?` Използвани жокери: ${h}.`:" Без жокери!",
     next:"Следващо ›", close:"Затвори", showSol:"Покажи решението",
     locked:"Тази фигура е фиксирана от предизвикателството",
@@ -126,7 +130,7 @@ const I18N = {
   en:{sub:"puzzle", new:"🎲 New", hint:"💡 Hint", help:"How to play",
     challenge:"Challenge", of:"level",
     remaining:n=>n===1?"1 piece left":`${n} pieces left`,
-    win:"Well done!", winText:(l,n)=>`Challenge #${n} solved (${l}).`,
+    win:"Well done!", winText:(l,n,tm)=>`Challenge #${n} solved (${l}) in ${tm}.`,
     winHints:h=>h?` Hints used: ${h}.`:" No hints!",
     next:"Next ›", close:"Close", showSol:"Show solution",
     locked:"This piece is fixed by the challenge",
@@ -380,9 +384,33 @@ const st={
   solved:LS.get("solved",{}),
   board:{}, slots:new Uint8Array(24),
   trayIso:{}, selected:null, undo:[],
-  hintsUsed:0, revealed:false, ch:null
+  hintsUsed:0, revealed:false, ch:null,
+  playStart:null, playAccum:0, timerFrozen:false
 };
 const T=()=>I18N[st.lang];
+
+/* ---------- play timer ---------- */
+function elapsedMs(){ return st.playAccum + (st.playStart?Date.now()-st.playStart:0); }
+function fmtTime(ms){
+  const s=Math.floor(ms/1000), m=Math.floor(s/60), ss=s%60;
+  return String(m).padStart(2,"0")+":"+String(ss).padStart(2,"0");
+}
+function tickTimer(){
+  const el=document.getElementById("timer"); if(!el) return;
+  el.textContent="⏱ "+fmtTime(elapsedMs());
+}
+function resetTimer(){
+  st.playAccum=0; st.playStart=Date.now(); st.timerFrozen=false;
+  const el=document.getElementById("timer"); if(el) el.classList.remove("frozen");
+  tickTimer();
+}
+function pauseTimer(){ if(st.playStart){ st.playAccum+=Date.now()-st.playStart; st.playStart=null; } }
+function resumeTimer(){ if(!st.timerFrozen && !st.playStart){ st.playStart=Date.now(); } }
+function freezeTimer(){
+  pauseTimer(); st.timerFrozen=true;
+  const el=document.getElementById("timer"); if(el) el.classList.add("frozen");
+  tickTimer();
+}
 let EMB=[];           // embedded solutions [{byName:{n:[iso,q,r]}, sigs:{n:sig}}]
 let EXTRA=[];         // solutions found by the background solver
 let allSigSet=new Set();
@@ -541,8 +569,17 @@ function findNearestPiece(pt,maxDist){
   }
   return bestName;
 }
+let dragStartedAt=0;
+function forceClearDrag(){
+  drag=null; gFloat.innerHTML=""; floatG=null; clearHl(); renderAll();
+}
 svg.addEventListener("pointerdown",e=>{
-  if(drag) return; // ignore a second finger while dragging
+  if(drag){
+    // safety net: a previous drag never got a pointerup/pointercancel
+    // (happens on some mobile browsers) — don't lock the game forever
+    if(Date.now()-dragStartedAt>2000) forceClearDrag();
+    else return; // ignore a second finger while a fresh drag is active
+  }
   if(!$("modal").classList.contains("hidden")) return;
   e.preventDefault();
   const pt=svgPt(e);
@@ -551,6 +588,7 @@ svg.addEventListener("pointerdown",e=>{
   const name=tEl?tEl.getAttribute("data-piece"):findNearestPiece(pt,44);
   if(!name){ st.selected=null; renderAll(); return; }
   lastPt=pt;
+  dragStartedAt=Date.now();
   if(st.board[name]){
     if(st.board[name].locked){ toast(T().locked); return; }
     const p=st.board[name];
@@ -570,13 +608,15 @@ svg.addEventListener("pointerdown",e=>{
   else moveFloat(pt);
   renderAll();
 });
-svg.addEventListener("pointermove",e=>{
+// pointermove/up/cancel are bound on window (not svg): if setPointerCapture
+// silently fails or the finger wanders outside the svg's box, these still fire.
+window.addEventListener("pointermove",e=>{
   if(!drag) return;
-  e.preventDefault();
+  if(e.cancelable) e.preventDefault();
   const pt=svgPt(e); lastPt=pt;
   if(!drag.moved && Math.hypot(pt.x-drag.startX,pt.y-drag.startY)>16) drag.moved=true;
   if(drag.moved) moveFloat(pt);
-});
+},{passive:false});
 function endDrag(e){
   if(!drag) return;
   const d=drag; drag=null; clearHl(); gFloat.innerHTML=""; floatG=null;
@@ -599,8 +639,15 @@ function endDrag(e){
   }
   renderAll();
 }
-svg.addEventListener("pointerup",endDrag);
-svg.addEventListener("pointercancel",endDrag);
+window.addEventListener("pointerup",endDrag);
+window.addEventListener("pointercancel",endDrag);
+window.addEventListener("blur",()=>{ if(drag) forceClearDrag(); });
+document.addEventListener("visibilitychange",()=>{
+  if(document.hidden){
+    if(drag) forceClearDrag();
+    pauseTimer();
+  }else resumeTimer();
+});
 svg.addEventListener("wheel",e=>{
   e.preventDefault();
   if(drag){ drag.iso=e.deltaY>0?ROT_R(drag.iso):ROT_L(drag.iso); startFloat(); if(lastPt) moveFloat(lastPt); }
@@ -691,11 +738,14 @@ function loadChallenge(level,num){
       if(bc&&canFit(st.slots,bc)) addPiece(n,iso,q,r,false);
     }
   }
+  resetTimer();
+  if(placedCount()===12) freezeTimer(); // reopening an already-solved challenge
   renderAll();
 }
 function checkWin(){
   if(placedCount()<12) return;
   if(st.revealed) return;
+  freezeTimer();
   const lv=st.level,num=st.ch.num;
   if(!st.solved[lv]) st.solved[lv]={};
   st.solved[lv][num]=1; LS.set("solved",st.solved);
@@ -735,6 +785,7 @@ function hint(){
 function showSolution(){
   if(!st.ch) return;
   st.revealed=true;
+  freezeTimer();
   for(const n of Object.keys(st.board)) if(!st.board[n].locked) removePiece(n);
   const sol=EMB[st.ch.solIdx];
   for(const n of NAMES) if(!st.board[n]){
@@ -753,7 +804,7 @@ function showWin(){
   const t=T();
   const lvName=st.level==="free"?t.freeName:t.levels[st.level];
   openModal(`<div class="bigwin">🎉</div><h2>${t.win}</h2>
-    <p>${t.winText(lvName,st.ch.num)}${t.winHints(st.hintsUsed)}</p>
+    <p>${t.winText(lvName,st.ch.num,fmtTime(elapsedMs()))}${t.winHints(st.hintsUsed)}</p>
     <div class="btns"><button class="primary" id="mNext">${t.next}</button>
     <button id="mClose">${t.close}</button></div>`);
   $("mNext").onclick=()=>{ closeModal(); loadChallenge(st.level,st.ch.num+1); };
@@ -1030,6 +1081,7 @@ function parseEmb(raw){
   applyLang();
   loadChallenge(LORDER.includes(st.level)?st.level:"starter", st.nums[st.level]||1);
   selftest({ok:EMB.length,bad:parsed.bad,total:parsed.total});
+  setInterval(tickTimer,1000);
   setTimeout(startEnum,1600);
 })();
 </script>
