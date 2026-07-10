@@ -7,7 +7,8 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0b0f1e">
 <meta name="robots" content="noindex, nofollow, noarchive">
-<title>Hex Link — логически пъзел</title>
+<meta name="apple-mobile-web-app-title" content="Tangle Puzzle">
+<title>Tangle Puzzle — логическа игра</title>
 <style>
   :root{
     --bg:#0b0f1e; --panel:#161d38; --panel2:#1c2447; --line:#2a3560;
@@ -64,9 +65,25 @@
   #toast{position:fixed; top:12px; left:50%; transform:translateX(-50%); background:#2b355e; border:1px solid var(--line);
     color:var(--text); padding:9px 16px; border-radius:999px; font-size:13px; z-index:40; max-width:92vw; text-align:center;
     box-shadow:0 6px 18px rgba(0,0,0,.4); animation:pop .15s ease-out;}
+  .badges{display:flex; flex-wrap:wrap; gap:6px; margin:10px 0 4px;}
+  .badge{font-size:21px; opacity:.25; filter:grayscale(1); padding:4px 6px; border-radius:9px; background:var(--panel2); border:1px solid var(--line);}
+  .badge.on{opacity:1; filter:none; border-color:var(--accent);}
+  .pmTabs{display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 8px;}
+  .pmTabs button{padding:5px 10px; font-size:12px;}
+  .pmTabs button.on{background:var(--accent); color:#20232e; font-weight:700; border-color:transparent;}
+  .pmGrid{display:grid; grid-template-columns:repeat(6,1fr); gap:6px; margin:8px 0 4px;}
+  .pmCell{display:flex; flex-direction:column; align-items:center; justify-content:center; padding:7px 2px; font-weight:700; font-size:13px; min-height:42px;}
+  .pmCell.done{background:#123c2a; border-color:var(--ok); color:var(--ok);}
+  .pmCell small{font-weight:600; font-size:10px; color:var(--dim); margin-top:2px;}
+  .pmCell.done small{color:var(--ok);}
+  .nickInput{width:100%; padding:9px 12px; border-radius:10px; border:1px solid var(--line);
+    background:var(--panel2); color:var(--text); font-size:15px; margin-top:8px; font-family:inherit;}
+  .shareBox{width:100%; min-height:56px; padding:9px 12px; border-radius:10px; border:1px solid var(--line);
+    background:var(--panel2); color:var(--text); font-size:13px; margin-top:8px; font-family:inherit; resize:none;}
   @media (max-width:430px){
     button,select{font-size:13px; padding:6px 9px;}
     .logo{font-size:15px;}
+    .pmGrid{grid-template-columns:repeat(5,1fr);}
   }
 </style>
 </head>
@@ -74,9 +91,11 @@
 <div id="app">
   <header>
     <div class="row">
-      <span class="logo">⬡ HEX LINK <small id="subT"></small></span>
+      <span class="logo">🧶 <span id="logoName">TANGLE PUZZLE</span></span>
       <span class="spacer"></span>
       <span class="timer" id="timer">⏱ 00:00</span>
+      <button id="btnMute" class="ghost">🔊</button>
+      <button id="btnNick" class="ghost">👤</button>
       <button id="btnLang" class="ghost">EN</button>
       <button id="btnHelp" class="ghost">?</button>
     </div>
@@ -85,8 +104,11 @@
       <div class="chnav">
         <button id="chPrev">‹</button><span class="num" id="chNum">№1</span><button id="chNext">›</button>
       </div>
+      <button id="btnProgress" class="ghost">📊</button>
+      <button id="btnDaily" class="ghost">📅</button>
       <button id="btnNew"></button>
       <button id="btnHint"></button>
+      <button id="btnSoftHint" class="ghost"></button>
       <span class="spacer"></span>
       <button id="btnUndo" class="ctl" title="Undo">↶</button>
       <button id="btnRotL" class="ctl" disabled>⟲</button>
@@ -103,7 +125,7 @@
 <script>
 "use strict";
 /* ============================================================
-   HEX LINK — логически пъзел, вдъхновен от IQ Link (SmartGames)
+   ТАНГЛЕ ПЪЗЕЛ — логическа игра, вдъхновена от IQ Link (SmartGames)
    Неофициална фен реализация само за лична употреба.
    Модел на фигурите: bwesterb/iqlink (проверен срещу описанието
    на дизайнера Raf Peeters: 16 топчета, 14 отворени, 6 затворени халки).
@@ -111,7 +133,7 @@
 
 /* ---------- i18n ---------- */
 const I18N = {
-  bg:{sub:"пъзел", new:"🎲 Нова", hint:"💡 Жокер", help:"Как се играе",
+  bg:{new:"🎲 Нова", hint:"💡 Жокер", softHint:"👁 Насока", help:"Как се играе",
     challenge:"Предизвикателство", of:"ниво",
     remaining:n=>n===1?"Остава 1 фигура":`Остават ${n} фигури`,
     win:"Браво!", winText:(l,n,tm)=>`Реши предизвикателство №${n} (${l}) за ${tm}.`,
@@ -119,15 +141,25 @@ const I18N = {
     next:"Следващо ›", close:"Затвори", showSol:"Покажи решението",
     locked:"Тази фигура е фиксирана от предизвикателството",
     hintPlaced:"Поставих една фигура от решението.",
+    softHintMsg:"Тази фигура трябва да играеш следващо — сам избери мястото и завъртането.",
     noHint:"С това подреждане не откривам познато решение — премигващите фигури вероятно трябва да се преместят.",
     noHint2:"Няма поставени фигури за проверка — просто опитай!",
     cantRotate:"Тук няма място за завъртане — пречат други фигури",
     revealed:"Показано е пълното решение.",
     solved:"решени", freeName:"СВОБОДНА ИГРА",
     levels:{starter:"СТАРТЕР", junior:"ДЖУНИОР", expert:"ЕКСПЕРТ", master:"МАЙСТОР", wizard:"МАГЬОСНИК", free:"СВОБОДНА"},
-    rules:["Подреди всичките 12 фигури върху дъската.","Елементите са 36, а гнездата само 24: топче може да влезе в отворена халка на друга фигура, ако отворът на халката сочи точно към рамото на топчето.","Затворените халки заемат гнездото изцяло — при тях нищо не се добавя.","Влачи фигурите с пръст или мишка. Двойно докосване, колелцето на мишката или ⟲ ⟳ завърта; ⇋ обръща огледално; ⌫ връща фигурата в поставката.","По-тъмните фигури са зададени от предизвикателството и не се местят.","Жокерът поставя една фигура от познато решение. Клавиши: R — завъртане, F — огледало, Ctrl+Z — назад."],
-    note:"Неофициална фен версия, вдъхновена от IQ Link® на SmartGames. Само за лична употреба."},
-  en:{sub:"puzzle", new:"🎲 New", hint:"💡 Hint", help:"How to play",
+    rules:["Подреди всичките 12 фигури върху дъската.","Елементите са 36, а гнездата само 24: топче може да влезе в отворена халка на друга фигура, ако отворът на халката сочи точно към рамото на топчето.","Затворените халки заемат гнездото изцяло — при тях нищо не се добавя.","Влачи фигурите с пръст или мишка. Двойно докосване, колелцето на мишката или ⟲ ⟳ завърта; ⇋ обръща огледално; ⌫ връща фигурата в поставката.","По-тъмните фигури са зададени от предизвикателството и не се местят.","Жокерът поставя една фигура от познато решение; насоката само показва коя е следващата, без да я поставя. Клавиши: R — завъртане, F — огледало, Ctrl+Z — назад."],
+    note:"Неофициална фен версия, вдъхновена от IQ Link® на SmartGames. Само за лична употреба.",
+    progress:"Прогрес", daily:"Дневно предизвикателство", sound:"Звук", nickname:"Никнейм",
+    nickTitle:"Твоят никнейм", nickDesc:"Показва се, когато споделяш резултат.", nickSaved:"Никнеймът е запазен.", save:"Запази",
+    share:"📋 Сподели", shareCopied:"Резултатът е копиран в клипборда!", shareFailed:"Неуспешно копиране — избери текста ръчно.",
+    newRecord:"Ново лично рекордно време!", bestTime:tm=>`Досегашен рекорд: ${tm}`,
+    dailyWin:d=>`📅 Дневно предизвикателство — ${d}`,
+    badges:{first_solve:"Първа стъпка", no_hints:"Без помощ", speed_60:"Светкавично (<1 мин)",
+      speed_20:"Мълниеносно (<20 сек)", ten_solved:"10 решени предизвикателства",
+      fifty_solved:"50 решени предизвикателства", all_complete:"Майстор на Tangle Puzzle"},
+    levelComplete:l=>`Завършено ниво: ${l}`},
+  en:{new:"🎲 New", hint:"💡 Hint", softHint:"👁 Nudge", help:"How to play",
     challenge:"Challenge", of:"level",
     remaining:n=>n===1?"1 piece left":`${n} pieces left`,
     win:"Well done!", winText:(l,n,tm)=>`Challenge #${n} solved (${l}) in ${tm}.`,
@@ -135,14 +167,24 @@ const I18N = {
     next:"Next ›", close:"Close", showSol:"Show solution",
     locked:"This piece is fixed by the challenge",
     hintPlaced:"Placed one piece from a solution.",
+    softHintMsg:"This piece should be played next — place and rotate it yourself.",
     noHint:"No known solution matches this layout — the blinking pieces probably need to move.",
     noHint2:"Nothing placed to check yet — just try!",
     cantRotate:"No room to rotate here — other pieces are in the way",
     revealed:"Full solution revealed.",
     solved:"solved", freeName:"FREE PLAY",
     levels:{starter:"STARTER", junior:"JUNIOR", expert:"EXPERT", master:"MASTER", wizard:"WIZARD", free:"FREE"},
-    rules:["Fit all 12 puzzle pieces on the board.","There are 36 puzzle parts but only 24 places: a ball may share a place with an open ring of another piece if the ring's opening points exactly along the ball's connecting arm.","Closed rings occupy their place entirely — nothing can be added there.","Drag pieces with finger or mouse. Double-tap, mouse wheel or ⟲ ⟳ rotates; ⇋ mirrors; ⌫ returns a piece to the tray.","Darker pieces are set by the challenge and cannot be moved.","The hint places one piece from a known solution. Keys: R — rotate, F — flip, Ctrl+Z — undo."],
-    note:"Unofficial fan version inspired by IQ Link® by SmartGames. Personal use only."}
+    rules:["Fit all 12 puzzle pieces on the board.","There are 36 puzzle parts but only 24 places: a ball may share a place with an open ring of another piece if the ring's opening points exactly along the ball's connecting arm.","Closed rings occupy their place entirely — nothing can be added there.","Drag pieces with finger or mouse. Double-tap, mouse wheel or ⟲ ⟳ rotates; ⇋ mirrors; ⌫ returns a piece to the tray.","Darker pieces are set by the challenge and cannot be moved.","The hint places one piece from a known solution; the nudge only shows which piece is next, without placing it. Keys: R — rotate, F — flip, Ctrl+Z — undo."],
+    note:"Unofficial fan version inspired by IQ Link® by SmartGames. Personal use only.",
+    progress:"Progress", daily:"Daily challenge", sound:"Sound", nickname:"Nickname",
+    nickTitle:"Your nickname", nickDesc:"Shown when you share a result.", nickSaved:"Nickname saved.", save:"Save",
+    share:"📋 Share", shareCopied:"Result copied to clipboard!", shareFailed:"Copy failed — select the text manually.",
+    newRecord:"New personal best time!", bestTime:tm=>`Previous best: ${tm}`,
+    dailyWin:d=>`📅 Daily challenge — ${d}`,
+    badges:{first_solve:"First Step", no_hints:"No Help Needed", speed_60:"Speedy (<1 min)",
+      speed_20:"Blazing Fast (<20 sec)", ten_solved:"10 Challenges Solved",
+      fifty_solved:"50 Challenges Solved", all_complete:"Tangle Puzzle Master"},
+    levelComplete:l=>`Level complete: ${l}`}
 };
 
 /* ---------- storage ---------- */
@@ -375,7 +417,7 @@ function pieceBBoxCenter(name,isoIdx){
   return [(minx+maxx)/2,(miny+maxy)/2,maxx-minx,maxy-miny];
 }
 /* ---------- game state ---------- */
-const LEVELS={starter:{K:9},junior:{K:8},expert:{K:6},master:{K:4},wizard:{K:2},free:{K:0}};
+const LEVELS={starter:{K:9,COUNT:30},junior:{K:8,COUNT:30},expert:{K:6,COUNT:30},master:{K:4,COUNT:30},wizard:{K:2,COUNT:30},free:{K:0,COUNT:0}};
 const LORDER=["starter","junior","expert","master","wizard","free"];
 const st={
   lang:LS.get("lang","bg"),
@@ -385,7 +427,9 @@ const st={
   board:{}, slots:new Uint8Array(24),
   trayIso:{}, selected:null, undo:[],
   hintsUsed:0, revealed:false, ch:null,
-  playStart:null, playAccum:0, timerFrozen:false
+  playStart:null, playAccum:0, timerFrozen:false,
+  nickname:LS.get("nickname",""), badges:LS.get("badges",{}),
+  muted:LS.get("muted",false), isDaily:false
 };
 const T=()=>I18N[st.lang];
 
@@ -411,6 +455,34 @@ function freezeTimer(){
   const el=document.getElementById("timer"); if(el) el.classList.add("frozen");
   tickTimer();
 }
+
+/* ---------- sound ---------- */
+let actx=null;
+function ensureAudio(){
+  if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} }
+  else if(actx.state==="suspended"){ actx.resume().catch(()=>{}); }
+  return actx;
+}
+function beep(freq,dur,type,vol,delay){
+  if(st.muted) return;
+  const ctx=ensureAudio(); if(!ctx) return;
+  type=type||"sine"; vol=vol==null?0.12:vol; delay=delay||0;
+  const t0=ctx.currentTime+delay;
+  const osc=ctx.createOscillator(), gain=ctx.createGain();
+  osc.type=type; osc.frequency.value=freq;
+  gain.gain.setValueAtTime(0.0001,t0);
+  gain.gain.exponentialRampToValueAtTime(vol,t0+0.012);
+  gain.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.start(t0); osc.stop(t0+dur+0.02);
+}
+function sndPlace(){ beep(520,0.09); }
+function sndRotate(){ beep(780,0.05,"square",0.05); }
+function sndInvalid(){ beep(150,0.16,"sawtooth",0.07); }
+function sndHint(){ beep(880,0.11); beep(1180,0.13,"sine",0.08,0.09); }
+function sndWin(){ beep(523,0.12); beep(659,0.12,"sine",0.13,0.11); beep(784,0.24,"sine",0.15,0.22); }
+function updateMuteBtn(){ const b=$("btnMute"); if(b) b.textContent=st.muted?"🔇":"🔊"; }
+
 let EMB=[];           // embedded solutions [{byName:{n:[iso,q,r]}, sigs:{n:sig}}]
 let EXTRA=[];         // solutions found by the background solver
 let allSigSet=new Set();
@@ -429,6 +501,95 @@ function removePiece(name){
 }
 const boardSig=name=>{const p=st.board[name];return placeSig(bitCells(name,p.iso,p.q,p.r));};
 const placedCount=()=>Object.keys(st.board).length;
+
+/* ---------- best times ---------- */
+const bestKey=(level,num)=>`best.${level}.${num}`;
+const getBest=(level,num)=>LS.get(bestKey(level,num),null);
+function recordBest(level,num,ms){
+  const prev=getBest(level,num);
+  if(prev===null||ms<prev){ LS.set(bestKey(level,num),ms); return true; }
+  return false;
+}
+
+/* ---------- achievements ---------- */
+const BADGE_DEFS=[
+  {id:"first_solve",icon:"🔰"},{id:"no_hints",icon:"🧠"},{id:"speed_60",icon:"⚡"},
+  {id:"speed_20",icon:"🚀"},{id:"ten_solved",icon:"⭐"},{id:"fifty_solved",icon:"🌟"},
+  {id:"complete_starter",icon:"🥉"},{id:"complete_junior",icon:"🥈"},{id:"complete_expert",icon:"🥇"},
+  {id:"complete_master",icon:"🏆"},{id:"complete_wizard",icon:"👑"},{id:"all_complete",icon:"💎"}
+];
+function badgeLabel(id){
+  const t=T();
+  if(id.startsWith("complete_")) return t.levelComplete(t.levels[id.slice(9)]);
+  return (t.badges&&t.badges[id])||id;
+}
+function checkAchievements(ms){
+  const unlocked=[];
+  const add=id=>{ if(!st.badges[id]){ st.badges[id]=Date.now(); unlocked.push(id); } };
+  let total=0; for(const lv in st.solved) total+=Object.keys(st.solved[lv]).length;
+  if(total>=1) add("first_solve");
+  if(total>=10) add("ten_solved");
+  if(total>=50) add("fifty_solved");
+  if(st.hintsUsed===0) add("no_hints");
+  if(ms<60000) add("speed_60");
+  if(ms<20000) add("speed_20");
+  if(st.level!=="free"){
+    const cnt=LEVELS[st.level].COUNT;
+    let allDone=cnt>0;
+    for(let n=1;allDone&&n<=cnt;n++){ if(!(st.solved[st.level]&&st.solved[st.level][n])) allDone=false; }
+    if(allDone) add("complete_"+st.level);
+  }
+  if(LORDER.filter(l=>l!=="free").every(l=>st.badges["complete_"+l])) add("all_complete");
+  LS.set("badges",st.badges);
+  return unlocked;
+}
+
+/* ---------- daily challenge ---------- */
+function todayKey(){
+  const d=new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+function dailyTarget(){
+  const d=new Date();
+  const seed=(d.getFullYear()*10000+(d.getMonth()+1)*100+d.getDate())>>>0;
+  const rng=mulberry32(seed);
+  const pool=LORDER.filter(l=>l!=="free");
+  const level=pool[Math.floor(rng()*pool.length)];
+  const num=1+Math.floor(rng()*LEVELS[level].COUNT);
+  return {level,num};
+}
+function updateDailyBtn(){
+  const b=$("btnDaily"); if(!b) return;
+  const d=dailyTarget();
+  const done=st.solved[d.level]&&st.solved[d.level][d.num];
+  b.textContent="📅"+(done?"✓":"");
+}
+function shareText(info){
+  const prefix=st.nickname?st.nickname+" — ":"";
+  const hintsStr=st.hintsUsed?`${st.hintsUsed}🔎`:"0🔎";
+  return `${prefix}Tangle Puzzle 📅 ${todayKey()}\n⏱ ${fmtTime(info.ms)}  ${hintsStr}${info.isRecord?"  🏆":""}`;
+}
+async function copyShare(text){
+  try{
+    await navigator.clipboard.writeText(text);
+    toast(T().shareCopied); return;
+  }catch(e){}
+  try{
+    const ta=document.createElement("textarea");
+    ta.value=text; ta.style.position="fixed"; ta.style.opacity="0";
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    const ok=document.execCommand("copy"); document.body.removeChild(ta);
+    if(ok){ toast(T().shareCopied); return; }
+  }catch(e2){}
+  toast(T().shareFailed);
+  const card=$("modalCard");
+  if(card && !card.querySelector(".shareBox")){
+    const box=document.createElement("textarea");
+    box.className="shareBox"; box.readOnly=true; box.value=text;
+    card.appendChild(box);
+    box.focus(); box.select();
+  }
+}
 
 /* ---------- rendering ---------- */
 const PIECE_EL={};
@@ -487,12 +648,13 @@ function updateHud(){
   const done=st.ch&&st.solved[st.level]&&st.solved[st.level][st.ch.num];
   const left=12-placedCount();
   $("status").textContent=st.ch?
-    `${t.challenge} №${st.ch.num} · ${levelLabel(st.level).replace(/ ✓\d+$/,"")}${done?" ✓":""} · ${t.remaining(left)}`:"";
+    `${st.isDaily?"📅 ":""}${t.challenge} №${st.ch.num} · ${levelLabel(st.level).replace(/ ✓\d+$/,"")}${done?" ✓":""} · ${t.remaining(left)}`:"";
   const selPiece=st.selected, onBoard=selPiece&&st.board[selPiece];
   const can=selPiece&&(!onBoard||!st.board[selPiece].locked);
   ["btnRotL","btnRotR","btnFlip"].forEach(b=>$(b).disabled=!can);
   $("btnRem").disabled=!(onBoard&&!st.board[selPiece].locked);
   $("btnUndo").disabled=!st.undo.length;
+  updateDailyBtn();
 }
 let toastTimer=null;
 function toast(msg){
@@ -631,8 +793,10 @@ function endDrag(e){
   if(d.target && d.target.valid){
     addPiece(d.name,d.iso,d.target.q,d.target.r,false);
     pushUndo({name:d.name,from:d.from,to:{iso:d.iso,q:d.target.q,r:d.target.r}});
+    sndPlace();
     renderAll(); checkWin(); return;
   }
+  if(d.target && !d.target.valid) sndInvalid();
   if(d.fromBoard){
     if(pt && pt.y>TRAY_Y-4){ st.trayIso[d.name]=d.iso; pushUndo({name:d.name,from:d.from,to:null}); }
     else addPiece(d.name,d.from.iso,d.from.q,d.from.r,false);
@@ -664,13 +828,16 @@ function rotateSel(dir){ // 1=cw, -1=ccw, 0=flip
     if(canFit(st.slots,bc)){
       addPiece(name,ni,p.q,p.r,false);
       pushUndo({name,from:{iso:p.iso,q:p.q,r:p.r},to:{iso:ni,q:p.q,r:p.r}});
+      sndRotate();
     }else{
       addPiece(name,p.iso,p.q,p.r,false);
       toast(T().cantRotate);
+      sndInvalid();
     }
   }else{
     const cur=st.trayIso[name]??ISO_IDX.I;
     st.trayIso[name]=dir===0?DO_FLIP(cur):(dir>0?ROT_R(cur):ROT_L(cur));
+    sndRotate();
   }
   renderAll();
 }
@@ -720,7 +887,7 @@ function genChallenge(level,num){
 function loadChallenge(level,num){
   num=Math.max(1,num|0);
   st.board={}; st.slots.fill(0); st.undo=[]; st.selected=null;
-  st.hintsUsed=0; st.revealed=false; st.trayIso={};
+  st.hintsUsed=0; st.revealed=false; st.trayIso={}; st.isDaily=false;
   st.level=level; st.nums[level]=num;
   LS.set("level",level); LS.set("nums",st.nums);
   st.ch=genChallenge(level,num);
@@ -749,18 +916,36 @@ function checkWin(){
   const lv=st.level,num=st.ch.num;
   if(!st.solved[lv]) st.solved[lv]={};
   st.solved[lv][num]=1; LS.set("solved",st.solved);
-  showWin();
+  const ms=elapsedMs();
+  const prevBest=getBest(lv,num);
+  const isRecord=recordBest(lv,num,ms);
+  const unlocked=checkAchievements(ms);
+  sndWin();
+  showWin({ms,isRecord,prevBest,unlocked});
 }
 
 /* ---------- hint ---------- */
 function matchAll(T0,names){ for(const n of names){ if(T0.sigs[n]!==boardSig(n)) return false; } return true; }
-function hint(){
-  if(!st.ch) return;
+function findMatchSet(){
   const lockedN=Object.keys(st.board).filter(n=>st.board[n].locked);
   const playerN=Object.keys(st.board).filter(n=>!st.board[n].locked);
-  if(placedCount()===12) return;
   const pool=allSolutions().filter(T0=>matchAll(T0,lockedN));
   const full=pool.filter(T0=>matchAll(T0,playerN));
+  return {playerN,pool,full};
+}
+function flashSuspects(playerN,pool){
+  let suspects=playerN.filter(n=>!pool.some(T0=>T0.sigs[n]===boardSig(n)));
+  if(!suspects.length) suspects=playerN;
+  for(const n of suspects){
+    const g=PIECE_EL[n];
+    if(g&&g.animate) g.animate([{opacity:1},{opacity:.15},{opacity:1}],{duration:400,iterations:3});
+  }
+  sndInvalid();
+  toast(playerN.length?T().noHint:T().noHint2);
+}
+function hint(){
+  if(!st.ch||placedCount()===12) return;
+  const {playerN,pool,full}=findMatchSet();
   if(full.length){
     const seed=EMB[st.ch.solIdx];
     const T0=full.includes(seed)?seed:full[0];
@@ -769,17 +954,32 @@ function hint(){
     addPiece(next,iso,q,r,false);
     pushUndo({name:next,from:null,to:{iso,q,r}});
     st.hintsUsed++; st.selected=next;
+    sndHint();
     toast(T().hintPlaced); renderAll(); checkWin();
   }else{
-    let suspects=playerN.filter(n=>!pool.some(T0=>T0.sigs[n]===boardSig(n)));
-    if(!suspects.length) suspects=playerN;
     st.hintsUsed++;
     renderAll();
-    for(const n of suspects){
-      const g=PIECE_EL[n];
-      if(g&&g.animate) g.animate([{opacity:1},{opacity:.15},{opacity:1}],{duration:400,iterations:3});
-    }
-    toast(playerN.length?T().noHint:T().noHint2);
+    flashSuspects(playerN,pool);
+  }
+}
+function softHint(){
+  if(!st.ch||placedCount()===12) return;
+  const {playerN,pool,full}=findMatchSet();
+  if(full.length){
+    const seed=EMB[st.ch.solIdx];
+    const T0=full.includes(seed)?seed:full[0];
+    const next=NAMES.find(n=>!st.board[n]);
+    st.selected=next;
+    st.hintsUsed++;
+    sndHint();
+    renderAll();
+    const g=gTray.querySelector(`[data-piece="${next}"]`);
+    if(g&&g.animate) g.animate([{opacity:1},{opacity:.35},{opacity:1}],{duration:450,iterations:2});
+    toast(T().softHintMsg);
+  }else{
+    st.hintsUsed++;
+    renderAll();
+    flashSuspects(playerN,pool);
   }
 }
 function showSolution(){
@@ -800,13 +1000,22 @@ function showSolution(){
 function openModal(html){ $("modalCard").innerHTML=html; $("modal").classList.remove("hidden"); }
 function closeModal(){ $("modal").classList.add("hidden"); }
 $("modal").addEventListener("pointerdown",e=>{ if(e.target.id==="modal") closeModal(); });
-function showWin(){
+function showWin(info){
   const t=T();
   const lvName=st.level==="free"?t.freeName:t.levels[st.level];
+  let extra="";
+  if(info.isRecord) extra+=`<p>🏆 ${t.newRecord}</p>`;
+  else if(info.prevBest!=null) extra+=`<p class="note">${t.bestTime(fmtTime(info.prevBest))}</p>`;
+  if(info.unlocked.length) extra+=`<p>${info.unlocked.map(id=>"🏅 "+badgeLabel(id)).join("<br>")}</p>`;
+  const dailyLine=st.isDaily?`<p>${t.dailyWin(todayKey())}</p>`:"";
   openModal(`<div class="bigwin">🎉</div><h2>${t.win}</h2>
-    <p>${t.winText(lvName,st.ch.num,fmtTime(elapsedMs()))}${t.winHints(st.hintsUsed)}</p>
-    <div class="btns"><button class="primary" id="mNext">${t.next}</button>
+    ${dailyLine}
+    <p>${t.winText(lvName,st.ch.num,fmtTime(info.ms))}${t.winHints(st.hintsUsed)}</p>
+    ${extra}
+    <div class="btns">${st.isDaily?`<button id="mShare">${t.share}</button>`:""}
+    <button class="primary" id="mNext">${t.next}</button>
     <button id="mClose">${t.close}</button></div>`);
+  if(st.isDaily) $("mShare").onclick=()=>copyShare(shareText(info));
   $("mNext").onclick=()=>{ closeModal(); loadChallenge(st.level,st.ch.num+1); };
   $("mClose").onclick=closeModal;
 }
@@ -819,21 +1028,69 @@ function showHelp(){
   $("mSol").onclick=showSolution;
   $("mClose").onclick=closeModal;
 }
+function showProgress(lvl){
+  const t=T();
+  lvl=lvl||(st.level!=="free"?st.level:LORDER.find(l=>l!=="free"));
+  const cnt=LEVELS[lvl].COUNT;
+  const badgesHtml=BADGE_DEFS.map(b=>{
+    const on=!!st.badges[b.id];
+    return `<span class="badge${on?" on":""}" title="${badgeLabel(b.id)}">${b.icon}</span>`;
+  }).join("");
+  let gridHtml="";
+  for(let n=1;n<=cnt;n++){
+    const done=st.solved[lvl]&&st.solved[lvl][n];
+    const best=getBest(lvl,n);
+    gridHtml+=`<button class="pmCell${done?" done":""}" data-n="${n}">${n}${best!=null?`<small>${fmtTime(best)}</small>`:""}</button>`;
+  }
+  const tabs=LORDER.filter(l=>l!=="free").map(l=>
+    `<button class="pmTab${l===lvl?" on":""}" data-l="${l}">${t.levels[l]}</button>`).join("");
+  openModal(`<h2>${t.progress}</h2>
+    <div class="badges">${badgesHtml}</div>
+    <div class="pmTabs">${tabs}</div>
+    <div class="pmGrid">${gridHtml}</div>
+    <div class="btns"><button class="primary" id="mClose">${t.close}</button></div>`);
+  $("modalCard").querySelectorAll(".pmTab").forEach(btn=>{ btn.onclick=()=>showProgress(btn.dataset.l); });
+  $("modalCard").querySelectorAll(".pmCell").forEach(btn=>{ btn.onclick=()=>{ closeModal(); loadChallenge(lvl,+btn.dataset.n); }; });
+  $("mClose").onclick=closeModal;
+}
+function showNick(){
+  const t=T();
+  const esc=(st.nickname||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;");
+  openModal(`<h2>${t.nickTitle}</h2><p class="note">${t.nickDesc}</p>
+    <input id="nickInput" class="nickInput" type="text" maxlength="18" value="${esc}">
+    <div class="btns"><button class="primary" id="mSave">${t.save}</button><button id="mClose">${t.close}</button></div>`);
+  $("mSave").onclick=()=>{
+    st.nickname=$("nickInput").value.trim().slice(0,18);
+    LS.set("nickname",st.nickname); closeModal(); toast(t.nickSaved);
+  };
+  $("mClose").onclick=closeModal;
+  setTimeout(()=>{ const i=$("nickInput"); if(i) i.focus(); },50);
+}
 
 /* ---------- language & controls ---------- */
 function applyLang(){
   const t=T();
   document.documentElement.lang=st.lang;
-  $("subT").textContent=t.sub;
   $("btnNew").textContent=t.new;
   $("btnHint").textContent=t.hint;
+  $("btnSoftHint").textContent=t.softHint;
   $("btnLang").textContent=st.lang==="bg"?"EN":"БГ";
+  $("logoName").textContent="TANGLE PUZZLE";
   $("btnHelp").title=t.help;
+  $("btnProgress").title=t.progress;
+  $("btnDaily").title=t.daily;
+  $("btnMute").title=t.sound;
+  $("btnNick").title=t.nickname;
   updateHud();
 }
 $("btnLang").onclick=()=>{ st.lang=st.lang==="bg"?"en":"bg"; LS.set("lang",st.lang); applyLang(); };
 $("btnHelp").onclick=showHelp;
 $("btnHint").onclick=hint;
+$("btnSoftHint").onclick=softHint;
+$("btnProgress").onclick=()=>showProgress();
+$("btnDaily").onclick=()=>{ const d=dailyTarget(); loadChallenge(d.level,d.num); st.isDaily=true; updateHud(); };
+$("btnMute").onclick=()=>{ st.muted=!st.muted; LS.set("muted",st.muted); updateMuteBtn(); };
+$("btnNick").onclick=showNick;
 $("btnUndo").onclick=undoAct;
 $("btnRotL").onclick=()=>rotateSel(-1);
 $("btnRotR").onclick=()=>rotateSel(1);
@@ -1079,6 +1336,7 @@ function parseEmb(raw){
   loadExtra();
   console.log(`[BOOT] embedded=${EMB.length} extra=${EXTRA.length} distinct=${allSigSet.size}`);
   applyLang();
+  updateMuteBtn();
   loadChallenge(LORDER.includes(st.level)?st.level:"starter", st.nums[st.level]||1);
   selftest({ok:EMB.length,bad:parsed.bad,total:parsed.total});
   setInterval(tickTimer,1000);
